@@ -21,7 +21,7 @@ information and view.json for design-level mapping.
 
 ```lua
 {
-  "rtl-buddy/rtlbuddy.nvim",
+  "rtl-buddy/rtl-buddy-nvim",
   ft = { "verilog", "systemverilog" },
   opts = {},
 }
@@ -30,7 +30,7 @@ information and view.json for design-level mapping.
 ### packer.nvim
 
 ```lua
-use({ "rtl-buddy/rtlbuddy.nvim", config = function() require("rtlbuddy").setup({}) end })
+use({ "rtl-buddy/rtl-buddy-nvim", config = function() require("rtlbuddy").setup({}) end })
 ```
 
 ## Requirements
