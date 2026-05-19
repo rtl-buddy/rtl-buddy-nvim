@@ -4,6 +4,7 @@
 -- the per-id callback registered with `request()`.
 local proto = require("rtlbuddy.protocol")
 local discovery = require("rtlbuddy.discovery")
+local schema = require("rtlbuddy.schema")
 
 local M = {}
 M.__index = M
@@ -80,6 +81,12 @@ local function dispatch_line(self, line)
     vim.schedule(function()
       vim.notify("rtlbuddy: malformed frame: " .. tostring(env), vim.log.levels.DEBUG)
     end)
+    return
+  end
+
+  -- Per-type payload validation. Drops messages that violate the v1
+  -- schema; surfaces a one-time WARN per (type, kind) shape.
+  if not schema.validate_or_report(env) then
     return
   end
 
