@@ -1,0 +1,68 @@
+*rtlbuddy.txt*  Neovim adapter for rtl-buddy-hub
+
+==============================================================================
+INTRODUCTION                                            *rtlbuddy* *rtlbuddy.nvim*
+
+rtlbuddy.nvim is the source-side participant in the rtl-buddy visualisation
+mesh. It connects to a running `rtl-buddy-hub` over TCP, broadcasts the
+cursor's file/line/column on demand, and services hub-originated requests
+(open_source) to keep this nvim instance in sync with the schematic viewer
+and surfer.
+
+The plugin COMPOSES with verible-verilog-ls. It never overrides <C-]> and it
+never claims the LSP diagnostics namespace.
+
+==============================================================================
+COMMANDS                                                *rtlbuddy-commands*
+
+                                                                *:RtlBuddyShow*
+:RtlBuddyShow        Broadcast `source_focused` for the cursor's
+                     {file,line,col} to the hub.
+
+                                                                *:RtlBuddyOpen*
+:RtlBuddyOpen {f} {l} [{c}]
+                     Open file {f} and jump to line {l}, column {c}.
+                     Usually invoked by the hub via RPC.
+
+                                                              *:RtlBuddyToWave*
+:RtlBuddyToWave      Send `wave_add_variables` for the symbol under the
+                     cursor.
+
+                                                              *:RtlBuddyDomain*
+:RtlBuddyDomain      Show hub-resolved overlay info at the cursor in a
+                     floating window.
+
+                                                              *:RtlBuddyStatus*
+:RtlBuddyStatus      Print hub connection state and registered peers.
+
+==============================================================================
+KEYMAPS                                                 *rtlbuddy-keymaps*
+
+Default (opt-out via `setup({keymaps = { show = nil, ... }})`):
+
+  <leader>rs    :RtlBuddyShow
+  <leader>rw    :RtlBuddyToWave
+  <leader>rd    :RtlBuddyDomain
+
+<C-]> is left to LSP go-to-definition.
+
+==============================================================================
+SETUP                                                   *rtlbuddy-setup*
+
+>lua
+    require("rtlbuddy").setup({
+      auto_connect = true,
+      use_lsp_for_symbol = true,
+      augment_lsp_hover = false,
+      diagnostics_namespace = "rtlbuddy",
+      keymaps = { show = "<leader>rs", to_wave = "<leader>rw", domain = "<leader>rd" },
+    })
+<
+
+==============================================================================
+HEALTH                                                  *rtlbuddy-health*
+
+`:checkhealth rtlbuddy` reports Neovim version, hub state, and LSP attach
+status.
+
+ vim:tw=78:ts=8:noet:ft=help:norl:

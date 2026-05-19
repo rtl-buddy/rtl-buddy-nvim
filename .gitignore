@@ -1,0 +1,8 @@
+.luarc.json
+.luarocks/
+luarocks/
+*.rock
+*.tmp
+*.log
+*.swp
+.DS_Store
