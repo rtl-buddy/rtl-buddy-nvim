@@ -105,12 +105,26 @@ suppressing echo-back to `src`.
 
 ## Tests
 
+Hermetic unit + mock-hub tests (no `rb` required):
+
 ```sh
 nvim --headless -u tests/minimal_init.lua \
   -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}"
 ```
 
-(plenary.nvim is the typical test harness; the assertions follow the busted DSL.)
+Live integration against a real `rtl-buddy-hub` daemon — installs `rtl_buddy` into
+a temp venv, starts `rb hub`, drives nvim, asserts the broadcast on the wire:
+
+```sh
+# from a PyPI rtl_buddy
+RTLBUDDY_INTEGRATION=1 tests/integration/run_live_hub.sh
+
+# or from a sibling checkout
+RTLBUDDY_INTEGRATION=1 RTLBUDDY_RB_SRC=../rtl_buddy tests/integration/run_live_hub.sh
+```
+
+The integration script is a no-op without `RTLBUDDY_INTEGRATION=1` so the default
+test surface stays hermetic.
 
 ## License
 
