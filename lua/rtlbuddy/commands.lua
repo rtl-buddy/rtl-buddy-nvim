@@ -22,11 +22,25 @@ local function require_hub_ready(client)
   return true
 end
 
--- :RtlBuddyShow — broadcast source_focused with the cursor location.
+-- :RtlBuddyShow — broadcast source_focused. With LSP attached we
+-- broadcast the symbol's *declaration* location (the hub then matches
+-- that against view.json source anchors); without LSP we fall back
+-- to the raw cursor file/line/col.
 function M.show()
   local r = rtl()
   if not require_hub_ready(r.client) then return end
-  local file, line, col = cursor_position()
+
+  local file, line, col
+  if r.config.use_lsp_for_symbol then
+    local decl = require("rtlbuddy.lsp").resolve_declaration()
+    if decl then
+      file, line, col = decl.file, decl.line, decl.col
+    end
+  end
+  if not file then
+    file, line, col = cursor_position()
+  end
+
   if file == "" then
     vim.notify("rtlbuddy: current buffer has no file", vim.log.levels.WARN)
     return

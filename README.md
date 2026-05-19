@@ -63,7 +63,7 @@ require("rtlbuddy").setup({
 
 | Command | What it does |
 |---|---|
-| `:RtlBuddyShow` | Broadcast `source_focused {file,line,col}` to the hub. |
+| `:RtlBuddyShow` | Broadcast `source_focused {file,line,col}` to the hub. With LSP attached, this is the symbol's **declaration** location (via `textDocument/declaration`, falling back to `textDocument/definition`); without LSP it's the raw cursor location. |
 | `:RtlBuddyOpen <file> <line> [<col>]` | Open and jump. Usually invoked by the hub via RPC; useful for scripting. |
 | `:RtlBuddyToWave` | Request `wave_add_variables` for the symbol under the cursor. |
 | `:RtlBuddyDomain` | Show hub-resolved overlay info at the cursor in a floating window. |

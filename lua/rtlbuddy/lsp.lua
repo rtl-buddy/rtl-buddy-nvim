@@ -12,22 +12,60 @@ function M.has_lsp(bufnr)
   return #clients > 0
 end
 
--- Resolve the symbol at the cursor. With LSP attached we ask for the
--- hover-targeted symbol via document_symbol; without LSP we fall back
--- to <cword>. Returns a plain string.
-function M.symbol_under_cursor(bufnr, use_lsp)
+-- Resolve the symbol at the cursor. With LSP attached we *could* ask
+-- for the hover-targeted symbol, but for :RtlBuddyToWave the cword is
+-- the right input to the hub's resolver and an LSP round-trip would
+-- only slow it down. Declaration-site resolution lives in
+-- `resolve_declaration` below, which is what :RtlBuddyShow uses.
+function M.symbol_under_cursor(bufnr, _use_lsp)
   bufnr = bufnr or 0
-  local cword = vim.fn.expand("<cword>")
-  if not use_lsp or not M.has_lsp(bufnr) then
-    return cword
+  return vim.fn.expand("<cword>")
+end
+
+-- Best-effort LSP location extraction from a single result item, which
+-- may be a Location, a LocationLink, or an array of those. Returns
+-- {file,line,col} (1-based) or nil.
+local function location_from(item)
+  if type(item) ~= "table" then return nil end
+  if #item > 0 then item = item[1] end
+  local uri = item.uri or item.targetUri
+  local range = item.targetSelectionRange or item.targetRange or item.range
+  if not uri or not range then return nil end
+  local file = vim.uri_to_fname(uri)
+  if not file or file == "" then return nil end
+  return {
+    file = file,
+    line = (range.start.line or 0) + 1,
+    col = (range.start.character or 0) + 1,
+  }
+end
+
+-- Resolve the declaration site of the symbol under the cursor via LSP.
+-- Tries `textDocument/declaration` first, then `textDocument/definition`
+-- (verible-verilog-ls implements the latter, not the former). Returns
+-- {file,line,col} or nil. Synchronous with a short timeout so :RtlBuddyShow
+-- doesn't block long enough to surprise the user if LSP is slow.
+function M.resolve_declaration(bufnr, win, timeout_ms)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  win = win or vim.api.nvim_get_current_win()
+  timeout_ms = timeout_ms or 500
+  if not M.has_lsp(bufnr) then return nil end
+
+  local ok_params, params = pcall(vim.lsp.util.make_position_params, win, "utf-8")
+  if not ok_params then return nil end
+
+  for _, method in ipairs({ "textDocument/declaration", "textDocument/definition" }) do
+    local ok, results = pcall(vim.lsp.buf_request_sync, bufnr, method, params, timeout_ms)
+    if ok and type(results) == "table" then
+      for _, r in pairs(results) do
+        if r and r.result then
+          local loc = location_from(r.result)
+          if loc then return loc end
+        end
+      end
+    end
   end
-  -- We don't synchronously round-trip to the LSP for every Show — the
-  -- hub already de-dupes and falls back gracefully. cword is good
-  -- enough for the broadcast; the hub's resolver turns it into an
-  -- instance_path via view.json. Returning cword keeps :RtlBuddyShow
-  -- non-blocking and avoids surprising the user with a hung command
-  -- when verible-LSP is slow.
-  return cword
+  return nil
 end
 
 -- Wrap textDocument/hover so hub-supplied overlay info is appended
