@@ -77,7 +77,7 @@ The plugin and the LSP own different layers:
 |---|---|---|
 | Symbol under cursor | `textDocument/hover`, `documentSymbol` | — |
 | Go-to-definition (`<C-]>`) | yes — never touched by this plugin | — |
-| Lint diagnostics | own namespace | separate `rtlbuddy` namespace |
+| Lint diagnostics | own namespace | separate `rtlbuddy` namespace (populated by hub `diagnostics_set` events — CDC/RDC/lint findings appear in `:Telescope diagnostics`, `:lua vim.diagnostic.open_float()`, signcolumn) |
 | Hover popup | primary | optional secondary contributor (opt-in) |
 | File parsing | yes | no — relies on hub + view.json |
 

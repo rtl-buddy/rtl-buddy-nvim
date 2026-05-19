@@ -214,6 +214,39 @@ rule("error", "error", { "code", "message", "context" }, function(p)
   if p.context ~= nil and type(p.context) ~= "table" then return "payload.context must be an object" end
 end)
 
+local VALID_SEVERITY = { error = true, warning = true, info = true, hint = true }
+local DIAG_ITEM_KEYS = { "file", "line", "col", "end_line", "end_col", "severity", "code", "message" }
+
+rule("diagnostics_set", "event", { "source", "items" }, function(p)
+  if not is_nonempty_string(p.source) then return "payload.source must be a non-empty string" end
+  if type(p.items) ~= "table" then return "payload.items must be an array" end
+  for i, item in ipairs(p.items) do
+    if type(item) ~= "table" then return ("payload.items[%d] must be an object"):format(i - 1) end
+    local extra = check_object_keys(item, DIAG_ITEM_KEYS)
+    if extra then return ("payload.items[%d]: %s"):format(i - 1, extra) end
+    if not is_nonempty_string(item.file) then return ("payload.items[%d].file must be a non-empty string"):format(i - 1) end
+    if not is_positive_int(item.line) then return ("payload.items[%d].line must be a positive integer"):format(i - 1) end
+    if item.col ~= nil and not is_positive_int(item.col) then
+      return ("payload.items[%d].col must be a positive integer"):format(i - 1)
+    end
+    if item.end_line ~= nil and not is_positive_int(item.end_line) then
+      return ("payload.items[%d].end_line must be a positive integer"):format(i - 1)
+    end
+    if item.end_col ~= nil and not is_positive_int(item.end_col) then
+      return ("payload.items[%d].end_col must be a positive integer"):format(i - 1)
+    end
+    if not VALID_SEVERITY[item.severity] then
+      return ("payload.items[%d].severity must be one of error|warning|info|hint"):format(i - 1)
+    end
+    if item.code ~= nil and not is_nonempty_string(item.code) then
+      return ("payload.items[%d].code must be a non-empty string"):format(i - 1)
+    end
+    if not is_nonempty_string(item.message) then
+      return ("payload.items[%d].message must be a non-empty string"):format(i - 1)
+    end
+  end
+end)
+
 -- The schema file itself; loaded lazily on first call to ensure_schema_loaded
 -- so import is cheap and tests can clear it.
 function M.ensure_schema_loaded()
