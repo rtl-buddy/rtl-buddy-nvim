@@ -114,4 +114,4 @@ nvim --headless -u tests/minimal_init.lua \
 
 ## License
 
-MIT — see `LICENSE`.
+BSD 3-Clause — see `LICENSE`. Matches the rest of the rtl-buddy project.
