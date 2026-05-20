@@ -121,6 +121,35 @@ describe("rtlbuddy.schema.validate", function()
     assert.is_nil(schema.validate(env("future_type", "event", { whatever = true })))
   end)
 
+  it("accepts a well-formed diagnostics_set", function()
+    assert.is_nil(schema.validate(env("diagnostics_set", "event", {
+      source = "rtl-buddy-cdc",
+      items = {
+        { file = "/x.sv", line = 1, severity = "error", message = "m" },
+        { file = "/y.sv", line = 2, col = 3, end_line = 2, end_col = 5,
+          severity = "warning", code = "CDC-002", message = "depth" },
+      },
+    })))
+  end)
+
+  it("rejects diagnostics_set with bad severity", function()
+    local err = schema.validate(env("diagnostics_set", "event", {
+      source = "x", items = { { file = "/x.sv", line = 1, severity = "fatal", message = "m" } },
+    }))
+    assert.is_truthy(err and err:find("severity"))
+  end)
+
+  it("rejects diagnostics_set with missing message", function()
+    local err = schema.validate(env("diagnostics_set", "event", {
+      source = "x", items = { { file = "/x.sv", line = 1, severity = "error" } },
+    }))
+    assert.is_truthy(err and err:find("message"))
+  end)
+
+  it("accepts diagnostics_set with empty items (clear)", function()
+    assert.is_nil(schema.validate(env("diagnostics_set", "event", { source = "x", items = {} })))
+  end)
+
   it("bye accepts null or empty object payload", function()
     assert.is_nil(schema.validate(env("bye", "event", nil)))
     assert.is_nil(schema.validate(env("bye", "event", {})))

@@ -44,7 +44,9 @@ function M.setup(user_config)
   merge(config, DEFAULT_CONFIG)
   _state.config = config
 
-  require("rtlbuddy.diagnostics").ensure_namespace(config.diagnostics_namespace)
+  local diagnostics = require("rtlbuddy.diagnostics")
+  diagnostics.ensure_namespace(config.diagnostics_namespace)
+  diagnostics.install_autocmds()
 
   if config.augment_lsp_hover then
     require("rtlbuddy.lsp").install_hover_augmentation(function(_symbol, _bufnr)
@@ -65,6 +67,12 @@ function M.setup(user_config)
         return commands.handle_open_source_request(env)
       end
       return { ok = false, error = "unsupported request: " .. env.type }
+    end,
+    on_event = function(env)
+      if env.type == "diagnostics_set" then
+        local p = env.payload or {}
+        diagnostics.apply(p.source, p.items or {})
+      end
     end,
   })
   if config.auto_connect then
