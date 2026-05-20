@@ -17,11 +17,15 @@ local function start_mock_hub()
     local buf = ""
     sock:read_start(function(rerr, chunk)
       assert(not rerr, rerr)
-      if not chunk then return end
+      if not chunk then
+        return
+      end
       buf = buf .. chunk
       while true do
         local nl = buf:find("\n", 1, true)
-        if not nl then break end
+        if not nl then
+          break
+        end
         local line = buf:sub(1, nl - 1)
         buf = buf:sub(nl + 1)
         local env = proto.decode(line)
@@ -36,7 +40,8 @@ local function start_mock_hub()
       end
     end)
   end)
-  local _, port = server:getsockname().port and server:getsockname() or { port = 0 }, server:getsockname().port
+  local _, port =
+    server:getsockname().port and server:getsockname() or { port = 0 }, server:getsockname().port
   return server, port, frames
 end
 
@@ -64,7 +69,9 @@ describe("rtlbuddy.hub end-to-end", function()
     require("rtlbuddy.commands").show()
     vim.wait(200, function()
       for _, f in ipairs(frames) do
-        if f.type == "source_focused" then return true end
+        if f.type == "source_focused" then
+          return true
+        end
       end
       return false
     end)

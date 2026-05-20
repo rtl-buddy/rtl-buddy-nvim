@@ -25,7 +25,7 @@ function M.new(opts)
   self.state = STATE_DISCONNECTED
   self.handle = nil
   self.buffer = ""
-  self.pending = {}        -- id -> callback(env, err)
+  self.pending = {} -- id -> callback(env, err)
   self.on_request = opts and opts.on_request or function() end
   self.on_event = opts and opts.on_event or function() end
   self.on_state_change = opts and opts.on_state_change or function() end
@@ -40,14 +40,20 @@ function M.new(opts)
 end
 
 local function set_state(self, state)
-  if self.state == state then return end
+  if self.state == state then
+    return
+  end
   self.state = state
   pcall(self.on_state_change, state)
 end
 
 local function schedule_reconnect(self)
-  if not self.auto_reconnect then return end
-  if self.reconnect_timer then return end
+  if not self.auto_reconnect then
+    return
+  end
+  if self.reconnect_timer then
+    return
+  end
   local delay = self.backoff_ms
   self.backoff_ms = math.min(self.backoff_ms * 2, MAX_BACKOFF_MS)
   self.reconnect_timer = vim.uv.new_timer()
@@ -56,7 +62,9 @@ local function schedule_reconnect(self)
       self.reconnect_timer:close()
       self.reconnect_timer = nil
     end
-    vim.schedule(function() M.connect(self) end)
+    vim.schedule(function()
+      M.connect(self)
+    end)
   end)
 end
 
@@ -94,7 +102,9 @@ local function dispatch_line(self, line)
     local cb = self.pending[env.id]
     if cb then
       self.pending[env.id] = nil
-      vim.schedule(function() cb(env, nil) end)
+      vim.schedule(function()
+        cb(env, nil)
+      end)
     end
     return
   end
@@ -111,7 +121,9 @@ local function dispatch_line(self, line)
   end
 
   if env.kind == proto.KIND.EVENT then
-    vim.schedule(function() pcall(self.on_event, env) end)
+    vim.schedule(function()
+      pcall(self.on_event, env)
+    end)
   end
 end
 
@@ -119,7 +131,9 @@ local function on_chunk(self, chunk)
   self.buffer = self.buffer .. chunk
   while true do
     local nl = self.buffer:find("\n", 1, true)
-    if not nl then break end
+    if not nl then
+      break
+    end
     local line = self.buffer:sub(1, nl - 1)
     self.buffer = self.buffer:sub(nl + 1)
     if #line > 0 then
@@ -145,7 +159,11 @@ local function start_handshake(self)
 end
 
 function M.connect(self)
-  if self.state == STATE_CONNECTING or self.state == STATE_HANDSHAKE or self.state == STATE_READY then
+  if
+    self.state == STATE_CONNECTING
+    or self.state == STATE_HANDSHAKE
+    or self.state == STATE_READY
+  then
     return
   end
   local loc = discovery.locate()
@@ -162,21 +180,31 @@ function M.connect(self)
   self.handle = handle
   handle:connect(loc.host, loc.port, function(err)
     if err then
-      vim.schedule(function() teardown(self, "connect: " .. err) end)
+      vim.schedule(function()
+        teardown(self, "connect: " .. err)
+      end)
       return
     end
     handle:read_start(function(rerr, data)
       if rerr then
-        vim.schedule(function() teardown(self, "read: " .. rerr) end)
+        vim.schedule(function()
+          teardown(self, "read: " .. rerr)
+        end)
         return
       end
       if not data then
-        vim.schedule(function() teardown(self, "eof") end)
+        vim.schedule(function()
+          teardown(self, "eof")
+        end)
         return
       end
-      vim.schedule(function() on_chunk(self, data) end)
+      vim.schedule(function()
+        on_chunk(self, data)
+      end)
     end)
-    vim.schedule(function() start_handshake(self) end)
+    vim.schedule(function()
+      start_handshake(self)
+    end)
   end)
 end
 
@@ -191,14 +219,18 @@ end
 -- Send a request and invoke cb(env, err) on response/error/timeout.
 function M.request(self, env, cb, timeout_ms)
   if self.state ~= STATE_READY then
-    vim.schedule(function() cb(nil, "hub not ready (state=" .. self.state .. ")") end)
+    vim.schedule(function()
+      cb(nil, "hub not ready (state=" .. self.state .. ")")
+    end)
     return
   end
   self.pending[env.id] = cb
   local ok, err = M.send(self, env)
   if not ok then
     self.pending[env.id] = nil
-    vim.schedule(function() cb(nil, err) end)
+    vim.schedule(function()
+      cb(nil, err)
+    end)
     return
   end
   if timeout_ms and timeout_ms > 0 then
@@ -223,7 +255,9 @@ function M.disconnect(self)
     self.reconnect_timer = nil
   end
   if self.handle and not self.handle:is_closing() then
-    pcall(function() M.send(self, proto.bye()) end)
+    pcall(function()
+      M.send(self, proto.bye())
+    end)
   end
   teardown(self, "user disconnect")
 end

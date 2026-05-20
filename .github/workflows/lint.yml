@@ -1,0 +1,47 @@
+name: Lint
+
+# Style + formatting checks. Kept separate from Test so a Lua
+# formatting fix doesn't have to wait on the slower Neovim matrix.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lint.yml'
+      - '.stylua.toml'
+      - 'lua/**'
+      - 'plugin/**'
+      - 'tests/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/lint.yml'
+      - '.stylua.toml'
+      - 'lua/**'
+      - 'plugin/**'
+      - 'tests/**'
+
+jobs:
+  stylua:
+    name: stylua --check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run stylua
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua/ plugin/ tests/
+
+      - name: Hint — install stylua to catch this locally
+        if: failure()
+        run: |
+          echo ""
+          echo "stylua --check failed. Format locally before pushing:"
+          echo ""
+          echo "  brew install stylua    # macOS"
+          echo "  cargo install stylua   # any platform"
+          echo "  stylua lua/ plugin/ tests/"
+          echo ""

@@ -37,11 +37,13 @@ M._by_source_file = M._by_source_file or {}
 -- equivalent forms collapse to the same key for non-existent files
 -- too.
 local function canon(path)
-  if not path or path == "" then return path end
+  if not path or path == "" then
+    return path
+  end
   local real = vim.uv.fs_realpath(path)
   local p = (real and real ~= "") and real or path
   if p:sub(1, 9) == "/private/" then
-    p = p:sub(9)  -- "/private/var/..." → "/var/..." (note: leading slash preserved by sub(9))
+    p = p:sub(9) -- "/private/var/..." → "/var/..." (note: leading slash preserved by sub(9))
   end
   return p
 end
@@ -54,24 +56,30 @@ end
 -- Convert a wire item to nvim's vim.diagnostic shape.
 local function to_diag(item)
   return {
-    lnum = item.line - 1,                                       -- 0-based
-    col = (item.col or 1) - 1,                                  -- 0-based
+    lnum = item.line - 1, -- 0-based
+    col = (item.col or 1) - 1, -- 0-based
     end_lnum = (item.end_line or item.line) - 1,
     end_col = (item.end_col or item.col or 1) - 1,
     severity = SEVERITY_MAP[item.severity] or vim.diagnostic.severity.WARN,
     message = item.message,
-    source = item.source_label,                                 -- set by caller
+    source = item.source_label, -- set by caller
     code = item.code,
   }
 end
 
 local function bufnr_for_file(file)
-  if not file or file == "" then return nil end
+  if not file or file == "" then
+    return nil
+  end
   -- vim.fn.bufnr already resolves symlinks, so the canonical key
   -- matches even if the buffer was opened via the un-resolved path.
   local b = vim.fn.bufnr(file)
-  if b == -1 then return nil end
-  if not vim.api.nvim_buf_is_loaded(b) then return nil end
+  if b == -1 then
+    return nil
+  end
+  if not vim.api.nvim_buf_is_loaded(b) then
+    return nil
+  end
   return b
 end
 
@@ -80,7 +88,9 @@ end
 -- and earlier sources' items disappear from the buffer.
 local function republish_file(file)
   local bufnr = bufnr_for_file(file)
-  if not bufnr then return end
+  if not bufnr then
+    return
+  end
   local merged = {}
   for source, by_file in pairs(M._by_source_file) do
     local items = by_file[file]
@@ -98,7 +108,9 @@ end
 -- Apply one `diagnostics_set` event payload. Replaces the cached
 -- items for `source` and republishes the affected files.
 function M.apply(source, items)
-  if not source or source == "" then return end
+  if not source or source == "" then
+    return
+  end
   local previous = M._by_source_file[source] or {}
   local fresh = {}
   for _, item in ipairs(items or {}) do
@@ -113,16 +125,24 @@ function M.apply(source, items)
   -- Files that previously had items from this source but no longer
   -- do still need a republish so old entries disappear.
   local touched = {}
-  for f in pairs(previous) do touched[f] = true end
-  for f in pairs(fresh) do touched[f] = true end
-  for f in pairs(touched) do republish_file(f) end
+  for f in pairs(previous) do
+    touched[f] = true
+  end
+  for f in pairs(fresh) do
+    touched[f] = true
+  end
+  for f in pairs(touched) do
+    republish_file(f)
+  end
 end
 
 -- Republish whichever sources have items for the file that just
 -- entered a buffer. Hooked up in install_autocmds().
 function M.on_buf_loaded(bufnr)
   local file = vim.api.nvim_buf_get_name(bufnr)
-  if file == "" then return end
+  if file == "" then
+    return
+  end
   local key = canon(vim.fn.fnamemodify(file, ":p"))
   for _, by_file in pairs(M._by_source_file) do
     if by_file[key] then
@@ -133,12 +153,16 @@ function M.on_buf_loaded(bufnr)
 end
 
 function M.install_autocmds()
-  if M._autocmds_installed then return end
+  if M._autocmds_installed then
+    return
+  end
   M._autocmds_installed = true
   local group = vim.api.nvim_create_augroup("rtlbuddy.diagnostics", { clear = true })
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
     group = group,
-    callback = function(args) M.on_buf_loaded(args.buf) end,
+    callback = function(args)
+      M.on_buf_loaded(args.buf)
+    end,
   })
 end
 
@@ -147,7 +171,9 @@ function M._reset()
   for source, by_file in pairs(M._by_source_file) do
     for file in pairs(by_file) do
       local b = bufnr_for_file(file)
-      if b then vim.diagnostic.reset(ns(), b) end
+      if b then
+        vim.diagnostic.reset(ns(), b)
+      end
     end
   end
   M._by_source_file = {}

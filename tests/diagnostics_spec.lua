@@ -28,8 +28,8 @@ describe("rtlbuddy.diagnostics", function()
     local got = items(TMP)
     assert.are.equal(1, #got)
     assert.are.equal(vim.diagnostic.severity.ERROR, got[1].severity)
-    assert.are.equal(1, got[1].lnum)        -- 0-based, was line 2
-    assert.are.equal(2, got[1].col)         -- 0-based, was col 3
+    assert.are.equal(1, got[1].lnum) -- 0-based, was line 2
+    assert.are.equal(2, got[1].col) -- 0-based, was col 3
     assert.are.equal("rtl-buddy-cdc", got[1].source)
     assert.are.equal("CDC-001", got[1].code)
   end)
@@ -56,10 +56,14 @@ describe("rtlbuddy.diagnostics", function()
     vim.cmd("edit " .. vim.fn.fnameescape(TMP))
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "module a;", "endmodule" })
 
-    diagnostics.apply("rtl-buddy-cdc",
-      { { file = TMP, line = 1, severity = "error", message = "cdc bad" } })
-    diagnostics.apply("rtl-buddy-lint",
-      { { file = TMP, line = 1, severity = "warning", message = "lint" } })
+    diagnostics.apply(
+      "rtl-buddy-cdc",
+      { { file = TMP, line = 1, severity = "error", message = "cdc bad" } }
+    )
+    diagnostics.apply(
+      "rtl-buddy-lint",
+      { { file = TMP, line = 1, severity = "warning", message = "lint" } }
+    )
     assert.are.equal(2, #items(TMP))
 
     diagnostics.apply("rtl-buddy-cdc", {})
@@ -88,17 +92,19 @@ describe("rtlbuddy.diagnostics", function()
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "module a;", "endmodule" })
 
     diagnostics.apply("s", {
-      { file = TMP, line = 1, severity = "error",   message = "e" },
+      { file = TMP, line = 1, severity = "error", message = "e" },
       { file = TMP, line = 1, severity = "warning", message = "w" },
-      { file = TMP, line = 1, severity = "info",    message = "i" },
-      { file = TMP, line = 1, severity = "hint",    message = "h" },
+      { file = TMP, line = 1, severity = "info", message = "i" },
+      { file = TMP, line = 1, severity = "hint", message = "h" },
     })
     local got = items(TMP)
     local sevs = {}
-    for _, d in ipairs(got) do sevs[d.message] = d.severity end
+    for _, d in ipairs(got) do
+      sevs[d.message] = d.severity
+    end
     assert.are.equal(vim.diagnostic.severity.ERROR, sevs["e"])
-    assert.are.equal(vim.diagnostic.severity.WARN,  sevs["w"])
-    assert.are.equal(vim.diagnostic.severity.INFO,  sevs["i"])
-    assert.are.equal(vim.diagnostic.severity.HINT,  sevs["h"])
+    assert.are.equal(vim.diagnostic.severity.WARN, sevs["w"])
+    assert.are.equal(vim.diagnostic.severity.INFO, sevs["i"])
+    assert.are.equal(vim.diagnostic.severity.HINT, sevs["h"])
   end)
 end)

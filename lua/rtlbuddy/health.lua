@@ -23,8 +23,14 @@ function M.check()
   else
     local s = require("rtlbuddy.hub").status(state.client)
     if s.state == "ready" then
-      health.ok(string.format("hub connected @ %s (server %s, peers: %s)",
-        s.endpoint or "?", s.server_version or "?", table.concat(s.registered_clients or {}, ",")))
+      health.ok(
+        string.format(
+          "hub connected @ %s (server %s, peers: %s)",
+          s.endpoint or "?",
+          s.server_version or "?",
+          table.concat(s.registered_clients or {}, ",")
+        )
+      )
     elseif s.state == "connecting" or s.state == "handshake" then
       health.warn("hub " .. s.state .. " @ " .. (s.endpoint or "?"))
     else
@@ -36,10 +42,14 @@ function M.check()
   local clients = vim.lsp.get_clients()
   if #clients > 0 then
     local names = {}
-    for _, c in ipairs(clients) do table.insert(names, c.name) end
+    for _, c in ipairs(clients) do
+      table.insert(names, c.name)
+    end
     health.ok("LSP attached: " .. table.concat(names, ", "))
   else
-    health.warn("no LSP clients attached (verible-verilog-ls recommended; plugin falls back to <cword>)")
+    health.warn(
+      "no LSP clients attached (verible-verilog-ls recommended; plugin falls back to <cword>)"
+    )
   end
 end
 

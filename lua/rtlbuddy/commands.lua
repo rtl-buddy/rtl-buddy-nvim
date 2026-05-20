@@ -11,7 +11,7 @@ end
 local function cursor_position()
   local file = vim.api.nvim_buf_get_name(0)
   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-  return file, row, col + 1  -- col returned 0-based; protocol wants 1-based
+  return file, row, col + 1 -- col returned 0-based; protocol wants 1-based
 end
 
 local function require_hub_ready(client)
@@ -28,7 +28,9 @@ end
 -- to the raw cursor file/line/col.
 function M.show()
   local r = rtl()
-  if not require_hub_ready(r.client) then return end
+  if not require_hub_ready(r.client) then
+    return
+  end
 
   local file, line, col
   if r.config.use_lsp_for_symbol then
@@ -78,26 +80,26 @@ end
 -- via view.json and forwards to surfer.
 function M.to_wave()
   local r = rtl()
-  if not require_hub_ready(r.client) then return end
+  if not require_hub_ready(r.client) then
+    return
+  end
   local symbol = require("rtlbuddy.lsp").symbol_under_cursor(0, r.config.use_lsp_for_symbol)
   if symbol == "" then
     vim.notify("rtlbuddy: no symbol under cursor", vim.log.levels.WARN)
     return
   end
-  require("rtlbuddy.hub").request(
-    r.client,
-    proto.wave_add_variables({ symbol }),
-    function(env, err)
-      if err then
-        vim.notify("rtlbuddy: wave_add_variables failed: " .. err, vim.log.levels.ERROR)
-        return
-      end
-      if env.kind == proto.KIND.ERROR then
-        vim.notify("rtlbuddy: hub error: " .. (env.payload and env.payload.message or "?"), vim.log.levels.ERROR)
-      end
-    end,
-    5000
-  )
+  require("rtlbuddy.hub").request(r.client, proto.wave_add_variables({ symbol }), function(env, err)
+    if err then
+      vim.notify("rtlbuddy: wave_add_variables failed: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    if env.kind == proto.KIND.ERROR then
+      vim.notify(
+        "rtlbuddy: hub error: " .. (env.payload and env.payload.message or "?"),
+        vim.log.levels.ERROR
+      )
+    end
+  end, 5000)
 end
 
 -- :RtlBuddyDomain — query the hub for overlay info at the cursor and
@@ -106,7 +108,9 @@ end
 -- (selection / scope / cursor time) so the UX hooks exist.
 function M.domain()
   local r = rtl()
-  if not require_hub_ready(r.client) then return end
+  if not require_hub_ready(r.client) then
+    return
+  end
   local symbol = require("rtlbuddy.lsp").symbol_under_cursor(0, r.config.use_lsp_for_symbol)
   local lines = {
     "rtlbuddy — overlay info",
@@ -153,14 +157,30 @@ function M.handle_open_source_request(env)
 end
 
 function M.register()
-  vim.api.nvim_create_user_command("RtlBuddyShow", M.show, { desc = "Broadcast cursor location to rtl-buddy-hub" })
+  vim.api.nvim_create_user_command(
+    "RtlBuddyShow",
+    M.show,
+    { desc = "Broadcast cursor location to rtl-buddy-hub" }
+  )
   vim.api.nvim_create_user_command("RtlBuddyOpen", function(opts)
     local args = opts.fargs
     M.open(args[1], args[2], args[3])
   end, { nargs = "+", desc = "Open <file> <line> [<col>]" })
-  vim.api.nvim_create_user_command("RtlBuddyToWave", M.to_wave, { desc = "Add cword to waveform via hub" })
-  vim.api.nvim_create_user_command("RtlBuddyDomain", M.domain, { desc = "Show overlay info at cursor" })
-  vim.api.nvim_create_user_command("RtlBuddyStatus", M.status, { desc = "Show hub connection status" })
+  vim.api.nvim_create_user_command(
+    "RtlBuddyToWave",
+    M.to_wave,
+    { desc = "Add cword to waveform via hub" }
+  )
+  vim.api.nvim_create_user_command(
+    "RtlBuddyDomain",
+    M.domain,
+    { desc = "Show overlay info at cursor" }
+  )
+  vim.api.nvim_create_user_command(
+    "RtlBuddyStatus",
+    M.status,
+    { desc = "Show hub connection status" }
+  )
 end
 
 return M

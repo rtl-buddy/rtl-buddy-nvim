@@ -16,10 +16,12 @@ local VALID_KIND = { event = true, request = true, response = true, error = true
 -- in init.lua so successive calls within one nvim session do not collide.
 function M.new_id()
   local template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
-  return (template:gsub("[xy]", function(c)
-    local v = (c == "x") and math.random(0, 0xf) or math.random(8, 0xb)
-    return string.format("%x", v)
-  end))
+  return (
+    template:gsub("[xy]", function(c)
+      local v = (c == "x") and math.random(0, 0xf) or math.random(8, 0xb)
+      return string.format("%x", v)
+    end)
+  )
 end
 
 -- Build an envelope dict. Caller fills payload (may be nil).

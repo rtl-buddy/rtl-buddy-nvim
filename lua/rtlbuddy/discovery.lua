@@ -9,14 +9,23 @@ local HUB_DISCOVERY_FILENAME = "hub.json"
 
 local function read_json(path)
   local fd = vim.uv.fs_open(path, "r", 438)
-  if not fd then return nil end
+  if not fd then
+    return nil
+  end
   local stat = vim.uv.fs_fstat(fd)
-  if not stat then vim.uv.fs_close(fd); return nil end
+  if not stat then
+    vim.uv.fs_close(fd)
+    return nil
+  end
   local data = vim.uv.fs_read(fd, stat.size, 0)
   vim.uv.fs_close(fd)
-  if not data then return nil end
+  if not data then
+    return nil
+  end
   local ok, decoded = pcall(vim.json.decode, data)
-  if not ok then return nil end
+  if not ok then
+    return nil
+  end
   return decoded
 end
 
@@ -28,7 +37,9 @@ local function find_discovery(start)
       return candidate
     end
     local parent = vim.fs.dirname(cur)
-    if not parent or parent == cur then return nil end
+    if not parent or parent == cur then
+      return nil
+    end
     cur = parent
   end
   return nil
