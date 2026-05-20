@@ -40,6 +40,22 @@ local function location_from(item)
   }
 end
 
+-- True when any client attached to bufnr advertises `method` in its
+-- server capabilities. Used to gate `vim.lsp.buf_request_sync` calls:
+-- nvim emits a user-visible "method X is not supported" notification
+-- via `vim.notify` when zero attached clients implement the method,
+-- and `pcall` can't suppress that (it isn't a raised error). Filtering
+-- ourselves keeps :RtlBuddyShow quiet against LSPs that don't expose
+-- every method we'd like to try.
+local function any_client_supports(bufnr, method)
+  for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+    if client:supports_method(method) then
+      return true
+    end
+  end
+  return false
+end
+
 -- Resolve the declaration site of the symbol under the cursor via LSP.
 -- Tries `textDocument/declaration` first, then `textDocument/definition`
 -- (verible-verilog-ls implements the latter, not the former). Returns
@@ -55,6 +71,13 @@ function M.resolve_declaration(bufnr, win, timeout_ms)
   if not ok_params then return nil end
 
   for _, method in ipairs({ "textDocument/declaration", "textDocument/definition" }) do
+    if not any_client_supports(bufnr, method) then
+      -- Skip the buf_request_sync call entirely. Without this guard,
+      -- nvim notifies the user that the method isn't supported even
+      -- though we're about to fall through to the next method (or to
+      -- the cursor fallback in commands.lua) — pure noise.
+      goto continue
+    end
     local ok, results = pcall(vim.lsp.buf_request_sync, bufnr, method, params, timeout_ms)
     if ok and type(results) == "table" then
       for _, r in pairs(results) do
@@ -64,6 +87,7 @@ function M.resolve_declaration(bufnr, win, timeout_ms)
         end
       end
     end
+    ::continue::
   end
   return nil
 end
