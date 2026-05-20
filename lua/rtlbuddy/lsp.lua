@@ -26,13 +26,21 @@ end
 -- may be a Location, a LocationLink, or an array of those. Returns
 -- {file,line,col} (1-based) or nil.
 local function location_from(item)
-  if type(item) ~= "table" then return nil end
-  if #item > 0 then item = item[1] end
+  if type(item) ~= "table" then
+    return nil
+  end
+  if #item > 0 then
+    item = item[1]
+  end
   local uri = item.uri or item.targetUri
   local range = item.targetSelectionRange or item.targetRange or item.range
-  if not uri or not range then return nil end
+  if not uri or not range then
+    return nil
+  end
   local file = vim.uri_to_fname(uri)
-  if not file or file == "" then return nil end
+  if not file or file == "" then
+    return nil
+  end
   return {
     file = file,
     line = (range.start.line or 0) + 1,
@@ -65,10 +73,14 @@ function M.resolve_declaration(bufnr, win, timeout_ms)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   win = win or vim.api.nvim_get_current_win()
   timeout_ms = timeout_ms or 500
-  if not M.has_lsp(bufnr) then return nil end
+  if not M.has_lsp(bufnr) then
+    return nil
+  end
 
   local ok_params, params = pcall(vim.lsp.util.make_position_params, win, "utf-8")
-  if not ok_params then return nil end
+  if not ok_params then
+    return nil
+  end
 
   for _, method in ipairs({ "textDocument/declaration", "textDocument/definition" }) do
     if not any_client_supports(bufnr, method) then
@@ -83,7 +95,9 @@ function M.resolve_declaration(bufnr, win, timeout_ms)
       for _, r in pairs(results) do
         if r and r.result then
           local loc = location_from(r.result)
-          if loc then return loc end
+          if loc then
+            return loc
+          end
         end
       end
     end
@@ -96,7 +110,9 @@ end
 -- below verible's own hover output. Opt-in via setup({augment_lsp_hover = true}).
 -- get_overlay(symbol, bufnr) -> string | nil (markdown lines).
 function M.install_hover_augmentation(get_overlay)
-  if M._hover_installed then return end
+  if M._hover_installed then
+    return
+  end
   M._hover_installed = true
   local original = vim.lsp.handlers["textDocument/hover"]
   vim.lsp.handlers["textDocument/hover"] = function(err, result, ctx, config)
@@ -104,7 +120,9 @@ function M.install_hover_augmentation(get_overlay)
     local symbol = vim.fn.expand("<cword>")
     local extra
     local ok, value = pcall(get_overlay, symbol, bufnr)
-    if ok then extra = value end
+    if ok then
+      extra = value
+    end
 
     if extra and extra ~= "" then
       if result and result.contents then
@@ -123,7 +141,9 @@ function M.install_hover_augmentation(get_overlay)
       end
     end
 
-    if original then return original(err, result, ctx, config) end
+    if original then
+      return original(err, result, ctx, config)
+    end
     return vim.lsp.handlers.hover(err, result, ctx, config)
   end
 end

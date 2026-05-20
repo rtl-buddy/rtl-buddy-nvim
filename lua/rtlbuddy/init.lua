@@ -6,7 +6,7 @@ local M = {}
 local DEFAULT_CONFIG = {
   -- Plugin starts a hub client (TCP) and reads .rtl-buddy/hub.json from
   -- the project root upward. RTL_BUDDY_HUB env var overrides.
-  hub_discovery = nil,             -- accepted for forward compat; not used today
+  hub_discovery = nil, -- accepted for forward compat; not used today
   use_lsp_for_symbol = true,
   augment_lsp_hover = false,
   diagnostics_namespace = "rtlbuddy",
@@ -83,7 +83,9 @@ function M.setup(user_config)
 end
 
 function M.connect()
-  if not _state.client then return end
+  if not _state.client then
+    return
+  end
   _state.client.auto_reconnect = true
   require("rtlbuddy.hub").connect(_state.client)
 end

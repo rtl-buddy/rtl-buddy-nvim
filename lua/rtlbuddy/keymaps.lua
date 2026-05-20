@@ -3,11 +3,13 @@
 local M = {}
 
 function M.apply(spec)
-  if not spec then return end
+  if not spec then
+    return
+  end
   local bindings = {
-    { spec.show,    "<cmd>RtlBuddyShow<cr>",   "rtl-buddy: show cursor at hub" },
+    { spec.show, "<cmd>RtlBuddyShow<cr>", "rtl-buddy: show cursor at hub" },
     { spec.to_wave, "<cmd>RtlBuddyToWave<cr>", "rtl-buddy: add cword to wave" },
-    { spec.domain,  "<cmd>RtlBuddyDomain<cr>", "rtl-buddy: overlay info" },
+    { spec.domain, "<cmd>RtlBuddyDomain<cr>", "rtl-buddy: overlay info" },
   }
   for _, b in ipairs(bindings) do
     if b[1] then

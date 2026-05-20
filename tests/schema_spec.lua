@@ -5,21 +5,34 @@
 local schema = require("rtlbuddy.schema")
 
 local function env(type_, kind, payload)
-  return { v = 1, id = "00000000-0000-4000-8000-000000000000", origin = "src", kind = kind, type = type_, payload = payload }
+  return {
+    v = 1,
+    id = "00000000-0000-4000-8000-000000000000",
+    origin = "src",
+    kind = kind,
+    type = type_,
+    payload = payload,
+  }
 end
 
 describe("rtlbuddy.schema.validate", function()
-  before_each(function() schema._reset_reported() end)
+  before_each(function()
+    schema._reset_reported()
+  end)
 
   it("accepts a well-formed source_focused event", function()
     assert.is_nil(schema.validate(env("source_focused", "event", {
-      file = "/abs/path.sv", line = 12, col = 3,
+      file = "/abs/path.sv",
+      line = 12,
+      col = 3,
     })))
   end)
 
   it("rejects source_focused with line < 1", function()
     local err = schema.validate(env("source_focused", "event", {
-      file = "/abs/path.sv", line = 0, col = 3,
+      file = "/abs/path.sv",
+      line = 0,
+      col = 3,
     }))
     assert.is_string(err)
     assert.is_truthy(err:find("line"), "error should mention 'line', got: " .. err)
@@ -27,7 +40,10 @@ describe("rtlbuddy.schema.validate", function()
 
   it("rejects source_focused with extra fields", function()
     local err = schema.validate(env("source_focused", "event", {
-      file = "/abs/path.sv", line = 1, col = 1, extra = true,
+      file = "/abs/path.sv",
+      line = 1,
+      col = 1,
+      extra = true,
     }))
     assert.is_truthy(err and err:find("extra"))
   end)
@@ -60,30 +76,38 @@ describe("rtlbuddy.schema.validate", function()
 
   it("welcome.registered_clients must be from the origin enum", function()
     assert.is_nil(schema.validate(env("welcome", "response", {
-      server_version = "1.0.0", registered_clients = { "view", "src" },
+      server_version = "1.0.0",
+      registered_clients = { "view", "src" },
     })))
     local err = schema.validate(env("welcome", "response", {
-      server_version = "1.0.0", registered_clients = { "view", "bogus" },
+      server_version = "1.0.0",
+      registered_clients = { "view", "bogus" },
     }))
     assert.is_truthy(err and err:find("registered_clients"))
   end)
 
   it("hello requires client/version/capabilities and rejects duplicates", function()
     assert.is_nil(schema.validate(env("hello", "request", {
-      client = "src", version = "0.1.0", capabilities = { "open_source" },
+      client = "src",
+      version = "0.1.0",
+      capabilities = { "open_source" },
     })))
     local err = schema.validate(env("hello", "request", {
-      client = "src", version = "0.1.0", capabilities = { "x", "x" },
+      client = "src",
+      version = "0.1.0",
+      capabilities = { "x", "x" },
     }))
     assert.is_truthy(err)
   end)
 
   it("error code must be in the catalog", function()
     assert.is_nil(schema.validate(env("error", "error", {
-      code = "not_connected", message = "no wave client",
+      code = "not_connected",
+      message = "no wave client",
     })))
     local err = schema.validate(env("error", "error", {
-      code = "made_up", message = "...",
+      code = "made_up",
+      message = "...",
     }))
     assert.is_truthy(err and err:find("code"))
   end)
@@ -106,12 +130,16 @@ describe("rtlbuddy.schema.validate", function()
   it("validate_or_report notifies once per (type,kind)", function()
     local notifies = 0
     local original = vim.notify
-    vim.notify = function() notifies = notifies + 1 end
+    vim.notify = function()
+      notifies = notifies + 1
+    end
     local bad = env("source_focused", "event", { file = "/x", line = 0, col = 1 })
     schema.validate_or_report(bad)
     schema.validate_or_report(bad)
     -- vim.schedule queues; flush.
-    vim.wait(50, function() return notifies > 0 end)
+    vim.wait(50, function()
+      return notifies > 0
+    end)
     vim.notify = original
     assert.are.equal(1, notifies)
   end)

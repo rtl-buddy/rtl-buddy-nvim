@@ -14,8 +14,13 @@ while state.client.state ~= "ready" and vim.uv.hrtime() < deadline do
   vim.wait(50)
 end
 if state.client.state ~= "ready" then
-  io.stderr:write("DRIVE: hub not ready, state=" .. state.client.state ..
-                  " last_error=" .. tostring(state.client.last_error) .. "\n")
+  io.stderr:write(
+    "DRIVE: hub not ready, state="
+      .. state.client.state
+      .. " last_error="
+      .. tostring(state.client.last_error)
+      .. "\n"
+  )
   vim.cmd("cq")
 end
 
@@ -26,7 +31,7 @@ vim.api.nvim_buf_set_lines(0, 0, -1, false, {
   "  logic clk;",
   "endmodule",
 })
-vim.api.nvim_win_set_cursor(0, { 2, 8 })  -- 1-based: line 2, col 9
+vim.api.nvim_win_set_cursor(0, { 2, 8 }) -- 1-based: line 2, col 9
 
 require("rtlbuddy.commands").show()
 
