@@ -300,17 +300,30 @@ rule("error", "error", { "code", "message", "context" }, function(p)
 end)
 
 local VALID_SEVERITY = { error = true, warning = true, info = true, hint = true }
-local DIAG_ITEM_KEYS = { "file", "line", "col", "end_line", "end_col", "severity", "code", "message" }
+local DIAG_ITEM_KEYS =
+  { "file", "line", "col", "end_line", "end_col", "severity", "code", "message" }
 
 rule("diagnostics_set", "event", { "source", "items" }, function(p)
-  if not is_nonempty_string(p.source) then return "payload.source must be a non-empty string" end
-  if type(p.items) ~= "table" then return "payload.items must be an array" end
+  if not is_nonempty_string(p.source) then
+    return "payload.source must be a non-empty string"
+  end
+  if type(p.items) ~= "table" then
+    return "payload.items must be an array"
+  end
   for i, item in ipairs(p.items) do
-    if type(item) ~= "table" then return ("payload.items[%d] must be an object"):format(i - 1) end
+    if type(item) ~= "table" then
+      return ("payload.items[%d] must be an object"):format(i - 1)
+    end
     local extra = check_object_keys(item, DIAG_ITEM_KEYS)
-    if extra then return ("payload.items[%d]: %s"):format(i - 1, extra) end
-    if not is_nonempty_string(item.file) then return ("payload.items[%d].file must be a non-empty string"):format(i - 1) end
-    if not is_positive_int(item.line) then return ("payload.items[%d].line must be a positive integer"):format(i - 1) end
+    if extra then
+      return ("payload.items[%d]: %s"):format(i - 1, extra)
+    end
+    if not is_nonempty_string(item.file) then
+      return ("payload.items[%d].file must be a non-empty string"):format(i - 1)
+    end
+    if not is_positive_int(item.line) then
+      return ("payload.items[%d].line must be a positive integer"):format(i - 1)
+    end
     if item.col ~= nil and not is_positive_int(item.col) then
       return ("payload.items[%d].col must be a positive integer"):format(i - 1)
     end
