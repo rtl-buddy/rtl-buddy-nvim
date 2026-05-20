@@ -30,6 +30,9 @@ jobs:
   plenary:
     name: plenary — nvim ${{ matrix.neovim-version }}
     runs-on: ubuntu-latest
+    # Bound the run so an accidental hang in a TCP fixture or a missing
+    # user command can't burn the full 6-hour job ceiling.
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -51,12 +54,24 @@ jobs:
 
       - name: Run plenary tests
         # `PlenaryBustedDirectory` walks tests/ and runs every *_spec.lua
-        # under busted. Exit code is non-zero on any failure or error,
-        # which surfaces here. The extra rtp prepend points nvim at the
-        # plenary checkout we just made.
+        # under busted. Exit code is non-zero on any failure or error.
+        #
+        # Two non-obvious bits in this invocation:
+        #
+        #   1. No --noplugin. plenary.nvim's plugin/plenary.vim must
+        #      load for the PlenaryBustedDirectory user command to
+        #      register. With --noplugin set, nvim emits
+        #      "E492: Not an editor command" and hangs at the
+        #      interactive prompt under --headless.
+        #
+        #   2. `runtime! plugin/**/*.vim` re-fires plugin loading
+        #      against the runtimepath after the .plenary prepend, so
+        #      the test doesn't depend on plenary already being on rtp
+        #      at startup.
         run: |
-          nvim --headless --noplugin -u tests/minimal_init.lua \
+          nvim --headless -u tests/minimal_init.lua \
             -c "set rtp+=.plenary" \
+            -c "runtime! plugin/**/*.vim" \
             -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}"
 
   schema-drift:
