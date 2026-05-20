@@ -1,0 +1,11 @@
+# stylua config — formatting rules enforced by .github/workflows/lint.yml.
+# Matches the existing hand-written style across lua/ so introducing
+# the check doesn't ship with a mass-reformat commit.
+
+column_width = 100
+line_endings = "Unix"
+indent_type = "Spaces"
+indent_width = 2
+quote_style = "AutoPreferDouble"
+call_parentheses = "Always"
+collapse_simple_statement = "Never"

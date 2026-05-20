@@ -1,0 +1,84 @@
+name: Test
+
+# Plenary-based unit tests for the plugin. Mirrors what
+# `nvim --headless -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/"`
+# does locally. Matrixes over Neovim stable + nightly because the
+# plugin calls vim.lsp.get_clients() and client:supports_method()
+# which are stable across 0.10+ but worth catching on nightly drift.
+#
+# Skip the live integration script under tests/integration/ — it
+# needs a real `rb hub` daemon (pip-install rtl_buddy first). Track
+# adding that as a follow-up job that installs rtl_buddy from PyPI.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test.yml'
+      - 'lua/**'
+      - 'plugin/**'
+      - 'tests/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/test.yml'
+      - 'lua/**'
+      - 'plugin/**'
+      - 'tests/**'
+
+jobs:
+  plenary:
+    name: plenary — nvim ${{ matrix.neovim-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim-version: [stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim-version }}
+
+      - name: Checkout plenary.nvim
+        uses: actions/checkout@v4
+        with:
+          repository: nvim-lua/plenary.nvim
+          path: .plenary
+
+      - name: Run plenary tests
+        # `PlenaryBustedDirectory` walks tests/ and runs every *_spec.lua
+        # under busted. Exit code is non-zero on any failure or error,
+        # which surfaces here. The extra rtp prepend points nvim at the
+        # plenary checkout we just made.
+        run: |
+          nvim --headless --noplugin -u tests/minimal_init.lua \
+            -c "set rtp+=.plenary" \
+            -c "PlenaryBustedDirectory tests/ {minimal_init = 'tests/minimal_init.lua'}"
+
+  schema-drift:
+    # Vendored schema must match the upstream source-of-truth in
+    # rtl-buddy-view. The rtl_buddy repo has the same drift check;
+    # this one runs on every nvim-plugin PR so a change here that
+    # forgets the corresponding rtl-buddy-view update fails loudly.
+    name: schema drift vs rtl-buddy-view main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch upstream schema
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/rtl-buddy/rtl-buddy-view/main/schemas/hub-protocol-v1.json \
+            -o /tmp/upstream-hub-protocol-v1.json
+
+      - name: Diff vendored copy against upstream
+        run: |
+          if ! diff -u /tmp/upstream-hub-protocol-v1.json lua/rtlbuddy/schema/hub-protocol-v1.json; then
+            echo "::error::Vendored hub-protocol-v1.json has drifted from rtl-buddy-view main."
+            echo "::error::Re-copy rtl-buddy-view's schemas/hub-protocol-v1.json into lua/rtlbuddy/schema/."
+            exit 1
+          fi
