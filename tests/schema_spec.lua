@@ -166,6 +166,73 @@ describe("rtlbuddy.schema.validate", function()
     assert.is_truthy(schema.validate(env("bye", "event", { extra = 1 })))
   end)
 
+  it("resolve_wave_to_view request/response accept symmetric payloads", function()
+    assert.is_nil(
+      schema.validate(env("resolve_wave_to_view", "request", { wave_scope = "tb.dut.u_ff" }))
+    )
+    assert.is_nil(
+      schema.validate(env("resolve_wave_to_view", "response", { instance_path = "counter.u_ff" }))
+    )
+  end)
+
+  it("resolve_wave_to_view rejects empty wave_scope", function()
+    local err = schema.validate(env("resolve_wave_to_view", "request", { wave_scope = "" }))
+    assert.is_truthy(err)
+    assert.is_truthy(err:find("wave_scope"))
+  end)
+
+  it("state_snapshot request accepts an empty payload", function()
+    assert.is_nil(schema.validate(env("state_snapshot", "request", {})))
+  end)
+
+  it("state_snapshot response accepts a fully-populated snapshot", function()
+    assert.is_nil(schema.validate(env("state_snapshot", "response", {
+      active_model = "ip_demo_tiny_npu",
+      selection = { instance_path = "counter.u_ff", origin = "view" },
+      cursor_time = { t_fs = "12500000", origin = "wave" },
+      wave_scope = { wave_scope = "tb.dut.u_ff", origin = "wave" },
+      peers = { "view", "wave", "src" },
+      diagnostics_sources = { "rtl-buddy-cdc" },
+    })))
+  end)
+
+  it("state_snapshot response accepts an empty hub (all event slots null)", function()
+    assert.is_nil(schema.validate(env("state_snapshot", "response", {
+      active_model = nil,
+      selection = nil,
+      cursor_time = nil,
+      wave_scope = nil,
+      peers = {},
+      diagnostics_sources = {},
+    })))
+  end)
+
+  it("state_snapshot rejects an unknown origin on a slot", function()
+    local err = schema.validate(env("state_snapshot", "response", {
+      active_model = nil,
+      selection = { instance_path = "x", origin = "viewer" },
+      cursor_time = nil,
+      wave_scope = nil,
+      peers = {},
+      diagnostics_sources = {},
+    }))
+    assert.is_truthy(err)
+    assert.is_truthy(err:find("origin"))
+  end)
+
+  it("state_snapshot rejects a non-numeric t_fs", function()
+    local err = schema.validate(env("state_snapshot", "response", {
+      active_model = nil,
+      selection = nil,
+      cursor_time = { t_fs = "not-a-number", origin = "wave" },
+      wave_scope = nil,
+      peers = {},
+      diagnostics_sources = {},
+    }))
+    assert.is_truthy(err)
+    assert.is_truthy(err:find("t_fs"))
+  end)
+
   it("validate_or_report notifies once per (type,kind)", function()
     local notifies = 0
     local original = vim.notify

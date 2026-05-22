@@ -227,6 +227,108 @@ rule("resolve_signal_to_view", "response", { "instance_path", "port" }, function
   end
 end)
 
+-- Reverse of resolve_view_to_wave (rtl-buddy/rtl-buddy-view#79). Symmetric
+-- payload: request takes a wave_scope, response returns the single
+-- corresponding instance_path (the resolver collapses to one).
+rule("resolve_wave_to_view", "request", { "wave_scope" }, function(p)
+  if not is_nonempty_string(p.wave_scope) then
+    return "payload.wave_scope must be a non-empty string"
+  end
+end)
+rule("resolve_wave_to_view", "response", { "instance_path" }, function(p)
+  if not is_nonempty_string(p.instance_path) then
+    return "payload.instance_path must be a non-empty string"
+  end
+end)
+
+-- state_snapshot (rtl-buddy/rtl-buddy-view#79). Empty request payload;
+-- response carries the hub's cached view of the world. Every event-derived
+-- field is either an object (with the event payload + origin) or null
+-- when no event has fired yet.
+local function _check_event_object(p, key, required_payload_keys, origin_allowed)
+  local v = p[key]
+  if v == nil then
+    return ("payload.%s missing"):format(key)
+  end
+  if type(v) ~= "table" then
+    return ("payload.%s must be an object or null"):format(key)
+  end
+  for _, k in ipairs(required_payload_keys) do
+    if v[k] == nil then
+      return ("payload.%s.%s missing"):format(key, k)
+    end
+  end
+  if not origin_allowed[v.origin] then
+    return ("payload.%s.origin must be one of view|wave|src|cli"):format(key)
+  end
+end
+
+local _valid_origin = { view = true, wave = true, src = true, cli = true }
+
+rule("state_snapshot", "request", {}, function(_)
+  return nil
+end)
+
+rule("state_snapshot", "response", {
+  "active_model",
+  "selection",
+  "cursor_time",
+  "wave_scope",
+  "peers",
+  "diagnostics_sources",
+}, function(p)
+  -- active_model: string | null
+  if p.active_model ~= nil and not is_nonempty_string(p.active_model) then
+    return "payload.active_model must be a non-empty string or null"
+  end
+  if p.selection ~= nil then
+    local err = _check_event_object(p, "selection", { "instance_path", "origin" }, _valid_origin)
+    if err then
+      return err
+    end
+    if not is_nonempty_string(p.selection.instance_path) then
+      return "payload.selection.instance_path must be a non-empty string"
+    end
+  end
+  if p.cursor_time ~= nil then
+    local err = _check_event_object(p, "cursor_time", { "t_fs", "origin" }, _valid_origin)
+    if err then
+      return err
+    end
+    if not is_nonempty_string(p.cursor_time.t_fs) then
+      return "payload.cursor_time.t_fs must be a non-empty string"
+    end
+    if not p.cursor_time.t_fs:match("^[0-9]+$") then
+      return "payload.cursor_time.t_fs must be a decimal integer string"
+    end
+  end
+  if p.wave_scope ~= nil then
+    local err = _check_event_object(p, "wave_scope", { "wave_scope", "origin" }, _valid_origin)
+    if err then
+      return err
+    end
+    if not is_nonempty_string(p.wave_scope.wave_scope) then
+      return "payload.wave_scope.wave_scope must be a non-empty string"
+    end
+  end
+  if type(p.peers) ~= "table" then
+    return "payload.peers must be an array of origin strings"
+  end
+  for _, o in ipairs(p.peers) do
+    if not _valid_origin[o] then
+      return "payload.peers entries must be one of view|wave|src|cli"
+    end
+  end
+  if type(p.diagnostics_sources) ~= "table" then
+    return "payload.diagnostics_sources must be an array of strings"
+  end
+  for _, s in ipairs(p.diagnostics_sources) do
+    if not is_nonempty_string(s) then
+      return "payload.diagnostics_sources entries must be non-empty strings"
+    end
+  end
+end)
+
 rule("hello", "request", { "client", "version", "capabilities" }, function(p)
   local valid_origin = { view = true, wave = true, src = true, cli = true }
   if not valid_origin[p.client] then
