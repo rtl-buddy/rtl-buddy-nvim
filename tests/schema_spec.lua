@@ -160,6 +160,38 @@ describe("rtlbuddy.schema.validate", function()
     assert.is_nil(schema.validate(env("diagnostics_set", "event", { source = "x", items = {} })))
   end)
 
+  it("accepts diagnostics_set items with an optional instance_path", function()
+    assert.is_nil(schema.validate(env("diagnostics_set", "event", {
+      source = "claude-analysis",
+      items = {
+        {
+          file = "/abs/x.sv",
+          line = 42,
+          severity = "warning",
+          code = "WAVE-1",
+          message = "wr_ptr_q sampled while ce==0",
+          instance_path = "top.u_dma",
+        },
+      },
+    })))
+  end)
+
+  it("rejects diagnostics_set items with empty instance_path", function()
+    local err = schema.validate(env("diagnostics_set", "event", {
+      source = "claude-analysis",
+      items = {
+        {
+          file = "/abs/x.sv",
+          line = 42,
+          severity = "warning",
+          message = "m",
+          instance_path = "",
+        },
+      },
+    }))
+    assert.is_truthy(err and err:find("instance_path"))
+  end)
+
   it("bye accepts null or empty object payload", function()
     assert.is_nil(schema.validate(env("bye", "event", nil)))
     assert.is_nil(schema.validate(env("bye", "event", {})))

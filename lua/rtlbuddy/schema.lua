@@ -402,8 +402,22 @@ rule("error", "error", { "code", "message", "context" }, function(p)
 end)
 
 local VALID_SEVERITY = { error = true, warning = true, info = true, hint = true }
-local DIAG_ITEM_KEYS =
-  { "file", "line", "col", "end_line", "end_col", "severity", "code", "message" }
+local DIAG_ITEM_KEYS = {
+  "file",
+  "line",
+  "col",
+  "end_line",
+  "end_col",
+  "severity",
+  "code",
+  "message",
+  -- Optional producer-side hint: the view.json instance path this
+  -- finding pertains to. Lets consumers skip the file+line resolver
+  -- when the producer already knows the answer; required for
+  -- diagnostics inside instantiated module bodies where the parent's
+  -- node.source range can't anchor.
+  "instance_path",
+}
 
 rule("diagnostics_set", "event", { "source", "items" }, function(p)
   if not is_nonempty_string(p.source) then
@@ -443,6 +457,9 @@ rule("diagnostics_set", "event", { "source", "items" }, function(p)
     end
     if not is_nonempty_string(item.message) then
       return ("payload.items[%d].message must be a non-empty string"):format(i - 1)
+    end
+    if item.instance_path ~= nil and not is_nonempty_string(item.instance_path) then
+      return ("payload.items[%d].instance_path must be a non-empty string"):format(i - 1)
     end
   end
 end)
