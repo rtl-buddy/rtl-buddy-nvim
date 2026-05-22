@@ -40,6 +40,30 @@ use({ "rtl-buddy/rtl-buddy-nvim", config = function() require("rtlbuddy").setup(
 - Optional: `verible-verilog-ls` attached to the buffer for symbol resolution and hover
   augmentation. The plugin degrades to `<cword>` if no LSP is attached.
 
+### Recommended: pin `verible-verilog-ls` to rtl-buddy-view's Verible release
+
+`rtl-buddy-view` pins a specific Verible release for its CST extractor (currently
+`v0.0-4053-g89d4d98a`; see `_verible_install.VERIBLE_PINNED_VERSION` in that repo).
+If `verible-verilog-ls` is on a different version, `:RtlBuddyShow`'s symbol-declaration
+resolution can disagree with the schematic's `view.json` source anchors — same file,
+slightly different line/col — which shows up as the viewer panning to "almost the right
+place" after a click. Pointing the LSP at the same binary that `rtl-buddy-view` uses
+avoids that drift.
+
+```lua
+-- nvim-lspconfig
+local rb_view_vendor = vim.fn.expand(
+  "~/path/to/rtl-buddy-view/vendor/verible/v0.0-4053-g89d4d98a"
+)
+local platform = jit.os == "OSX" and "macos-arm64" or "linux-x86_64"
+require("lspconfig").verible.setup({
+  cmd = { rb_view_vendor .. "/" .. platform .. "/bin/verible-verilog-ls" },
+})
+```
+
+Or just install Verible system-wide (e.g. `brew install verible`) and bump it in lockstep
+when you rotate `rtl-buddy-view`'s pin.
+
 ## Configuration
 
 ```lua
