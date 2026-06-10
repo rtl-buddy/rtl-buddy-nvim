@@ -16,6 +16,12 @@ local DEFAULT_CONFIG = {
     to_wave = "<leader>rw",
     domain = "<leader>rd",
   },
+  -- `rb wave` inline annotation (WAVE_VALUE virtual text) + the <leader>wa
+  -- Surfer add-variable keymap. Folded in from rtl_buddy#272.
+  wave = {
+    annotate = true,
+    keymap = "<leader>wa",
+  },
 }
 
 local _state = {
@@ -59,6 +65,7 @@ function M.setup(user_config)
   local commands = require("rtlbuddy.commands")
   commands.register()
   require("rtlbuddy.keymaps").apply(config.keymaps)
+  require("rtlbuddy.wave").setup(config.wave)
 
   local hub = require("rtlbuddy.hub")
   _state.client = hub.new({

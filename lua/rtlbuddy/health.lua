@@ -51,6 +51,14 @@ function M.check()
       "no LSP clients attached (verible-verilog-ls recommended; plugin falls back to <cword>)"
     )
   end
+
+  -- Wave annotation (rb wave inline values + <leader>wa) — folded in #272.
+  local wave = state.config and state.config.wave
+  if not wave or wave.annotate ~= false then
+    health.ok("wave annotation enabled (`rb wave` inline values; <leader>wa → Surfer)")
+  else
+    health.info("wave annotation disabled (set wave.annotate = true to enable)")
+  end
 end
 
 return M
