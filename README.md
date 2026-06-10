@@ -10,6 +10,9 @@ This plugin is the **source-side** participant in the hub mesh. With it loaded:
 - `:RtlBuddyShow` broadcasts the cursor's file/line/column to the hub; the viewer pans, surfer
   highlights the matching scope.
 - `:RtlBuddyToWave` asks surfer (via the hub) to add the signal under the cursor to the wave.
+- `rb wave` launches nvim with the selected signal's value rendered inline as virtual text at
+  its declaration, and `<leader>wa` adds the signal under the cursor straight to the Surfer
+  waveform (folded in from rtl_buddy's old standalone `rtl_buddy_wave.lua`).
 
 The plugin **composes with** `verible-verilog-ls`. It never shadows `<C-]>`, never claims the
 LSP diagnostics namespace, and never re-parses Verilog — it leans on Verible for symbol
@@ -17,7 +20,29 @@ information and view.json for design-level mapping.
 
 ## Install
 
-### lazy.nvim
+### Recommended: `rb nvim-install` (managed by rtl_buddy)
+
+If you use the `rtl_buddy` CLI, let it manage this plugin — one command, no plugin
+manager and no hand-written `init.lua`:
+
+```bash
+rb nvim-install            # clone the pinned, hub-compatible revision and wire it up
+rb nvim-install --update   # re-sync to the revision pinned by your installed rtl_buddy
+rb nvim-install --force    # overwrite an existing install
+```
+
+It clones this repo (at a revision pinned to your rtl_buddy's hub protocol) into
+`~/.local/share/nvim/site/pack/rtlbuddy/start/rtl-buddy-nvim` and drops a managed
+`~/.local/share/nvim/site/plugin/rtl_buddy_setup.lua` that calls `setup()` with
+`auto_connect = true` and starts `verible-verilog-ls` when it's on `PATH`. Restart nvim
+and run `:checkhealth rtlbuddy` — hub + LSP should be green. (`rb wave-install-nvim` is a
+back-compat alias for the same command.)
+
+### Manual (plugin manager)
+
+For a hand-managed setup, install with your plugin manager and call `setup()` yourself.
+
+#### lazy.nvim
 
 ```lua
 {
@@ -27,7 +52,7 @@ information and view.json for design-level mapping.
 }
 ```
 
-### packer.nvim
+#### packer.nvim
 
 ```lua
 use({ "rtl-buddy/rtl-buddy-nvim", config = function() require("rtlbuddy").setup({}) end })
@@ -80,8 +105,27 @@ require("rtlbuddy").setup({
     domain  = "<leader>rd",  -- :RtlBuddyDomain
     -- set any key to nil to disable that mapping
   },
+  wave = {
+    annotate = true,            -- `rb wave` inline signal-value virtual text
+    keymap   = "<leader>wa",    -- add signal under cursor to Surfer (false to disable)
+  },
 })
 ```
+
+## Wave annotation (`rb wave`)
+
+When you open a design via `rb wave` with `editor-sock` configured, rtl-buddy launches
+this nvim with two env vars set, which the `wave` module consumes:
+
+| Env var | Used for |
+|---|---|
+| `WAVE_VALUE` | the selected signal's value — rendered as `▶ <value>` end-of-line virtual text (the `WaveValue` highlight: black on lemon-chiffon) at the cursor line on launch. |
+| `WAVE_CTRL_SOCK` | a unix socket back to Surfer — `<leader>wa` sends the word under the cursor as an `add_variable` command so it appears in the waveform. |
+
+Both degrade gracefully: with no `WAVE_VALUE` there's no annotation, and `<leader>wa`
+warns if the control socket isn't reachable (i.e. `rb wave` isn't running). See the
+[rtl_buddy wave docs](https://rtl-buddy.github.io/rtl_buddy/concepts/wave/) for the
+`cfg-surfer` `editor-sock` / `ctrl-sock` setup.
 
 ## Commands
 

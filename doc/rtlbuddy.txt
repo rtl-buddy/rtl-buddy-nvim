@@ -43,6 +43,7 @@ Default (opt-out via `setup({keymaps = { show = nil, ... }})`):
   <leader>rs    :RtlBuddyShow
   <leader>rw    :RtlBuddyToWave
   <leader>rd    :RtlBuddyDomain
+  <leader>wa    add signal under cursor to Surfer (when launched via `rb wave`)
 
 <C-]> is left to LSP go-to-definition.
 
@@ -56,13 +57,18 @@ SETUP                                                   *rtlbuddy-setup*
       augment_lsp_hover = false,
       diagnostics_namespace = "rtlbuddy",
       keymaps = { show = "<leader>rs", to_wave = "<leader>rw", domain = "<leader>rd" },
+      wave = { annotate = true, keymap = "<leader>wa" },
     })
 <
+
+`wave.annotate` shows the `rb wave` signal value (WAVE_VALUE) as inline virtual
+text on launch; `wave.keymap` adds the signal under the cursor to Surfer via the
+WAVE_CTRL_SOCK control socket. Set either to false/nil to disable.
 
 ==============================================================================
 HEALTH                                                  *rtlbuddy-health*
 
-`:checkhealth rtlbuddy` reports Neovim version, hub state, and LSP attach
-status.
+`:checkhealth rtlbuddy` reports Neovim version, hub state, LSP attach status,
+and whether wave annotation is enabled.
 
  vim:tw=78:ts=8:noet:ft=help:norl:

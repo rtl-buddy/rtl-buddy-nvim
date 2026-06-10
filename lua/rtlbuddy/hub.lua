@@ -9,7 +9,7 @@ local schema = require("rtlbuddy.schema")
 local M = {}
 M.__index = M
 
-local PLUGIN_VERSION = "0.1.0"
+local PLUGIN_VERSION = "0.2.0"
 local CAPABILITIES = { "open_source", "source_focused" }
 
 local STATE_DISCONNECTED = "disconnected"
