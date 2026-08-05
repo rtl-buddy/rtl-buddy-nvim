@@ -17,7 +17,7 @@
       "description": "RFC 4122 UUID for request/response correlation and loop-prevention dedupe."
     },
     "origin": {
-      "enum": ["view", "wave", "src", "cli", "notebook"],
+      "enum": ["view", "wave", "src", "cli", "notebook", "graph"],
       "description": "Conceptual originator of the message; the loop-prevention discriminator."
     },
     "kind": {
@@ -102,6 +102,23 @@
             "additionalProperties": false,
             "properties": {
               "wave_scope": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "graph_focus" } }, "required": ["type"] },
+      "then": {
+        "properties": {
+          "kind": { "const": "event" },
+          "payload": {
+            "type": "object",
+            "required": ["node"],
+            "additionalProperties": false,
+            "description": "Focus the design-knowledge-graph pane (`GET /graph`) on one node of `artefacts/graph/graph.json`. `node` is a graph node id — `module:<name>`, `inst:<top>/<dot.path>`, `test:<suite>#<name>`, and the rest of the vocabulary: design-tier ids in docs/graph-json-v1.md of this repo, config- and binding-tier ids in rtl_buddy's docs/concepts/graph.md. A node id the pane's loaded graph does not contain is a soft miss (the pane reports it and keeps its current focus), matching the unknown-overlay-name semantics of `view_overlay_set`.",
+            "properties": {
+              "node": { "type": "string", "minLength": 1 }
             }
           }
         }
@@ -383,6 +400,154 @@
       }
     },
     {
+      "if": { "properties": { "type": { "const": "wave_get_items" } }, "required": ["type"] },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": { "const": "request" },
+              "payload": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Ask the wave peer (surfer) to enumerate the items currently displayed in its waveform view. Maps to WCP get_item_list + get_item_info.",
+                "properties": {}
+              }
+            }
+          },
+          {
+            "properties": {
+              "kind": { "const": "response" },
+              "payload": {
+                "type": "object",
+                "required": ["items"],
+                "additionalProperties": false,
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "description": "Displayed items in view order. An empty array means the view holds no items.",
+                    "items": {
+                      "type": "object",
+                      "required": ["id", "type", "name"],
+                      "additionalProperties": false,
+                      "properties": {
+                        "id":    { "type": "integer", "minimum": 0, "description": "Surfer DisplayedItemRef. Session-scoped handle; pass to wave_remove_items / wave_move_items. May change after a clear/reload — re-query to resync." },
+                        "type":  { "type": "string", "minLength": 1, "description": "Surfer item kind: variable | divider | marker | group | timeline | stream | placeholder." },
+                        "name":  { "type": "string", "description": "Display name. Empty string for an unnamed divider." },
+                        "scope": { "type": "string", "minLength": 1, "description": "Owning wave scope when the item is a variable; omitted otherwise." }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "wave_remove_items" } }, "required": ["type"] },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": { "const": "request" },
+              "payload": {
+                "type": "object",
+                "required": ["ids"],
+                "additionalProperties": false,
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 1, "description": "DisplayedItemRefs (from wave_add_variables / wave_get_items) to remove." }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "kind": { "const": "response" },
+              "payload": {
+                "type": "object",
+                "required": ["ok"],
+                "additionalProperties": false,
+                "properties": {
+                  "ok":        { "type": "boolean" },
+                  "removed":   { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Subset of the requested ids that were present and are now gone (computed by diffing the item list)." },
+                  "not_found": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "Requested ids that were not in the view to begin with." }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "wave_move_items" } }, "required": ["type"] },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": { "const": "request" },
+              "payload": {
+                "type": "object",
+                "required": ["ids", "to_index"],
+                "additionalProperties": false,
+                "description": "Reorder displayed items: move ids (preserving their relative order) so the block starts at to_index in the visible item list. Maps to WCP move_items.",
+                "properties": {
+                  "ids":      { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 1 },
+                  "to_index": { "type": "integer", "minimum": 0, "description": "Target visible index (0 = top of the view)." }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "kind": { "const": "response" },
+              "payload": {
+                "type": "object",
+                "required": ["ok"],
+                "additionalProperties": false,
+                "properties": { "ok": { "type": "boolean" } }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "wave_add_comments" } }, "required": ["type"] },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": { "const": "request" },
+              "payload": {
+                "type": "object",
+                "required": ["texts"],
+                "additionalProperties": false,
+                "description": "Add one or more comment rows (named dividers) to the wave view. Maps to WCP add_dividers.",
+                "properties": {
+                  "texts":    { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "description": "Comment labels, one divider per entry, inserted in order." },
+                  "after_id": { "type": "integer", "minimum": 0, "description": "Optional DisplayedItemRef to insert the comments after. Appended to the end of the view when omitted." }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "kind": { "const": "response" },
+              "payload": {
+                "type": "object",
+                "required": ["ids"],
+                "additionalProperties": false,
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "description": "DisplayedItemRefs of the created comment rows, in input order." }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "if": { "properties": { "type": { "const": "view_pan_to" } }, "required": ["type"] },
       "then": {
         "oneOf": [
@@ -561,14 +726,14 @@
                   "active_model":  { "type": ["string", "null"], "description": "Currently-active model name when the hub was started with --model NAME, else null." },
                   "selection":     { "type": ["object", "null"], "description": "Last selection_changed payload broadcast through the hub, plus the origin that produced it. Null when the hub has seen no selection yet.",
                                      "required": ["instance_path", "origin"], "additionalProperties": false,
-                                     "properties": { "instance_path": { "type": "string", "minLength": 1 }, "origin": { "enum": ["view", "wave", "src", "cli", "notebook"] } } },
+                                     "properties": { "instance_path": { "type": "string", "minLength": 1 }, "origin": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] } } },
                   "cursor_time":   { "type": ["object", "null"], "description": "Last cursor_time_changed payload + origin. Null when no cursor event has fired.",
                                      "required": ["t_fs", "origin"], "additionalProperties": false,
-                                     "properties": { "t_fs": { "type": "string", "pattern": "^[0-9]+$" }, "origin": { "enum": ["view", "wave", "src", "cli", "notebook"] } } },
+                                     "properties": { "t_fs": { "type": "string", "pattern": "^[0-9]+$" }, "origin": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] } } },
                   "wave_scope":    { "type": ["object", "null"], "description": "Last scope_changed payload + origin. Null when no scope event has fired.",
                                      "required": ["wave_scope", "origin"], "additionalProperties": false,
-                                     "properties": { "wave_scope": { "type": "string", "minLength": 1 }, "origin": { "enum": ["view", "wave", "src", "cli", "notebook"] } } },
-                  "peers":         { "type": "array", "items": { "enum": ["view", "wave", "src", "cli", "notebook"] }, "uniqueItems": true,
+                                     "properties": { "wave_scope": { "type": "string", "minLength": 1 }, "origin": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] } } },
+                  "peers":         { "type": "array", "items": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] }, "uniqueItems": true,
                                      "description": "Origins currently registered against the hub." },
                   "diagnostics_sources": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true,
                                            "description": "Names of producers with cached diagnostics_set bundles." }
@@ -585,13 +750,13 @@
       "then": {
         "properties": {
           "kind": { "const": "request" },
-          "origin": { "enum": ["view", "wave", "src", "cli", "notebook"] },
+          "origin": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] },
           "payload": {
             "type": "object",
             "required": ["client", "version", "capabilities"],
             "additionalProperties": false,
             "properties": {
-              "client": { "enum": ["view", "wave", "src", "cli", "notebook"] },
+              "client": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] },
               "version": { "type": "string", "minLength": 1, "description": "Semver of the client implementation." },
               "capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
               "takeover": { "type": "boolean", "description": "When true, instructs the hub to disconnect any existing registration for the same client slot before accepting this hello. Used by browser tabs that find an older tab already attached: the new tab requests takeover, the old tab gets bye-broadcast and its socket closed. Optional; default false." }
@@ -613,7 +778,7 @@
               "server_version": { "type": "string", "minLength": 1 },
               "registered_clients": {
                 "type": "array",
-                "items": { "enum": ["view", "wave", "src", "cli", "notebook"] },
+                "items": { "enum": ["view", "wave", "src", "cli", "notebook", "graph"] },
                 "uniqueItems": true
               }
             }
