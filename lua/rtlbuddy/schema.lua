@@ -29,6 +29,18 @@ local function is_positive_int(v)
   return type(v) == "number" and v == math.floor(v) and v >= 1
 end
 
+-- The closed peer vocabulary: envelope origins, `hello.client`,
+-- `welcome.registered_clients`, `state_snapshot` event origins and the
+-- peers list all share it. One table, so the next origin added to the
+-- protocol lands here once instead of in four hand-copied enums (cov
+-- trailed graph/notebook for exactly that reason).
+local PEERS = { "view", "wave", "src", "cli", "notebook", "graph", "cov" }
+local PEER_SET = {}
+for _, o in ipairs(PEERS) do
+  PEER_SET[o] = true
+end
+local PEER_STR = table.concat(PEERS, "|")
+
 local function is_nonneg_int(v)
   return type(v) == "number" and v == math.floor(v) and v >= 0
 end
@@ -259,11 +271,11 @@ local function _check_event_object(p, key, required_payload_keys, origin_allowed
     end
   end
   if not origin_allowed[v.origin] then
-    return ("payload.%s.origin must be one of view|wave|src|cli"):format(key)
+    return ("payload.%s.origin must be one of %s"):format(key, PEER_STR)
   end
 end
 
-local _valid_origin = { view = true, wave = true, src = true, cli = true }
+local _valid_origin = PEER_SET
 
 rule("state_snapshot", "request", {}, function(_)
   return nil
@@ -316,7 +328,7 @@ rule("state_snapshot", "response", {
   end
   for _, o in ipairs(p.peers) do
     if not _valid_origin[o] then
-      return "payload.peers entries must be one of view|wave|src|cli"
+      return "payload.peers entries must be one of " .. PEER_STR
     end
   end
   if type(p.diagnostics_sources) ~= "table" then
@@ -330,9 +342,8 @@ rule("state_snapshot", "response", {
 end)
 
 rule("hello", "request", { "client", "version", "capabilities" }, function(p)
-  local valid_origin = { view = true, wave = true, src = true, cli = true }
-  if not valid_origin[p.client] then
-    return "payload.client must be one of view|wave|src|cli"
+  if not PEER_SET[p.client] then
+    return "payload.client must be one of " .. PEER_STR
   end
   if not is_nonempty_string(p.version) then
     return "payload.version must be a non-empty string"
@@ -359,11 +370,10 @@ rule("welcome", "response", { "server_version", "registered_clients" }, function
   if type(p.registered_clients) ~= "table" then
     return "payload.registered_clients must be an array"
   end
-  local valid_origin = { view = true, wave = true, src = true, cli = true }
   local seen = {}
   for i, c in ipairs(p.registered_clients) do
-    if not valid_origin[c] then
-      return ("payload.registered_clients[%d] must be one of view|wave|src|cli"):format(i - 1)
+    if not PEER_SET[c] then
+      return ("payload.registered_clients[%d] must be one of %s"):format(i - 1, PEER_STR)
     end
     if seen[c] then
       return ("payload.registered_clients[%d] duplicate"):format(i - 1)

@@ -74,6 +74,13 @@ describe("rtlbuddy.schema.validate", function()
     assert.is_string(schema.validate(env("cursor_time_changed", "event", { t_fs = 1234 })))
   end)
 
+  it("welcome accepts every peer in the closed vocabulary", function()
+    assert.is_nil(schema.validate(env("welcome", "response", {
+      server_version = "1.0.0",
+      registered_clients = { "view", "wave", "src", "cli", "notebook", "graph", "cov" },
+    })))
+  end)
+
   it("welcome.registered_clients must be from the origin enum", function()
     assert.is_nil(schema.validate(env("welcome", "response", {
       server_version = "1.0.0",
