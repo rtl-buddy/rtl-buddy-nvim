@@ -38,6 +38,15 @@ describe("rtlbuddy.protocol", function()
     end)
   end)
 
+  it("decode accepts every origin in the closed vocabulary", function()
+    for _, origin in ipairs({ "view", "wave", "src", "cli", "notebook", "graph", "cov" }) do
+      local back = proto.decode(
+        vim.json.encode({ v = 1, id = "x", origin = origin, kind = "event", type = "x" })
+      )
+      assert.are.equal(origin, back.origin)
+    end
+  end)
+
   it("new_id produces RFC-4122 v4-shaped strings", function()
     local id = proto.new_id()
     assert.is_true(id:match("^[0-9a-f]+-[0-9a-f]+-4[0-9a-f]+-[89ab][0-9a-f]+-[0-9a-f]+$") ~= nil)

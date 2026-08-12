@@ -9,7 +9,8 @@ M.PROTOCOL_VERSION = 1
 M.ORIGIN = { VIEW = "view", WAVE = "wave", SRC = "src", CLI = "cli" }
 M.KIND = { EVENT = "event", REQUEST = "request", RESPONSE = "response", ERROR = "error" }
 
-local VALID_ORIGIN = { view = true, wave = true, src = true, cli = true }
+local VALID_ORIGIN =
+  { view = true, wave = true, src = true, cli = true, notebook = true, graph = true, cov = true }
 local VALID_KIND = { event = true, request = true, response = true, error = true }
 
 -- RFC 4122 v4 UUID. vim.uv has no UUID helper; math.random is seeded
