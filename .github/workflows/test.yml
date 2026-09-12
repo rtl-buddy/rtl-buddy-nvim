@@ -76,10 +76,11 @@ jobs:
 
   schema-drift:
     # Vendored schema must match the upstream source-of-truth in
-    # rtl-buddy-view. The rtl_buddy repo has the same drift check;
-    # this one runs on every nvim-plugin PR so a change here that
-    # forgets the corresponding rtl-buddy-view update fails loudly.
-    name: schema drift vs rtl-buddy-view main
+    # rtl-buddy-sch (the repo formerly named rtl-buddy-view). rtl_buddy
+    # vendors the same file; its own drift test only fires when a sch
+    # checkout sits beside it, so this job is the one that runs on every
+    # PR and fails loudly when a change here forgets the upstream update.
+    name: schema drift vs rtl-buddy-sch main
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,13 +88,13 @@ jobs:
       - name: Fetch upstream schema
         run: |
           curl -fsSL \
-            https://raw.githubusercontent.com/rtl-buddy/rtl-buddy-view/main/schemas/hub-protocol-v1.json \
+            https://raw.githubusercontent.com/rtl-buddy/rtl-buddy-sch/main/schemas/hub-protocol-v1.json \
             -o /tmp/upstream-hub-protocol-v1.json
 
       - name: Diff vendored copy against upstream
         run: |
           if ! diff -u /tmp/upstream-hub-protocol-v1.json lua/rtlbuddy/schema/hub-protocol-v1.json; then
-            echo "::error::Vendored hub-protocol-v1.json has drifted from rtl-buddy-view main."
-            echo "::error::Re-copy rtl-buddy-view's schemas/hub-protocol-v1.json into lua/rtlbuddy/schema/."
+            echo "::error::Vendored hub-protocol-v1.json has drifted from rtl-buddy-sch main."
+            echo "::error::Re-copy rtl-buddy-sch's schemas/hub-protocol-v1.json into lua/rtlbuddy/schema/."
             exit 1
           fi
