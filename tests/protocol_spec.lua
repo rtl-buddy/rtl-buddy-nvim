@@ -39,7 +39,7 @@ describe("rtlbuddy.protocol", function()
   end)
 
   it("decode accepts every origin in the closed vocabulary", function()
-    for _, origin in ipairs({ "view", "wave", "src", "cli", "notebook", "graph", "cov" }) do
+    for _, origin in ipairs({ "view", "wave", "src", "cli", "notebook", "graph", "cov", "phys" }) do
       local back = proto.decode(
         vim.json.encode({ v = 1, id = "x", origin = origin, kind = "event", type = "x" })
       )
