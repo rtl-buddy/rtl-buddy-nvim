@@ -289,3 +289,61 @@ describe("rtlbuddy.schema.validate", function()
     assert.are.equal(1, notifies)
   end)
 end)
+
+-- The origin vocabulary fence.
+--
+-- `properties.origin.enum` in the vendored `hub-protocol-v1.json` owns
+-- the wire vocabulary; CI's `schema-drift` job keeps that file identical
+-- to rtl-buddy-sch `main`. The two Lua tables below are hand-copies of
+-- the enum — this validator is pure Lua and never parses the JSON at
+-- runtime — so re-syncing the schema without updating them leaves the
+-- plugin rejecting an origin the hub is entitled to send. That is the
+-- half-landing rtl-buddy/rtl-buddy-sch#154 is about; this reads the
+-- vendored file rather than repeating the list a third time.
+describe("origin vocabulary tracks the vendored schema", function()
+  local protocol = require("rtlbuddy.protocol")
+
+  local function schema_origins()
+    local path = schema.ensure_schema_loaded()
+    local doc = vim.json.decode(table.concat(vim.fn.readfile(path), "\n"))
+    return doc.properties.origin.enum
+  end
+
+  local function sorted(list)
+    local out = vim.deepcopy(list)
+    table.sort(out)
+    return out
+  end
+
+  it("finds a non-empty enum to compare against", function()
+    -- Guard the guard: a schema refactor that moved the enum would make
+    -- every assertion below pass against nil.
+    local origins = schema_origins()
+    assert.is_table(origins)
+    assert.is_true(#origins > 0)
+  end)
+
+  it("is exactly rtlbuddy.schema's PEERS, in the schema's order", function()
+    assert.are.same(schema_origins(), schema.PEERS)
+  end)
+
+  it("is exactly rtlbuddy.protocol's VALID_ORIGIN set", function()
+    local from_set = {}
+    for origin in pairs(protocol.VALID_ORIGIN) do
+      from_set[#from_set + 1] = origin
+    end
+    assert.are.same(sorted(schema_origins()), sorted(from_set))
+  end)
+
+  it("contains every origin the plugin may emit", function()
+    -- M.ORIGIN is deliberately a SUBSET — the origins nvim itself sends
+    -- as, not the ones it must accept. A typo in it is still a bug.
+    local valid = {}
+    for _, origin in ipairs(schema_origins()) do
+      valid[origin] = true
+    end
+    for name, origin in pairs(protocol.ORIGIN) do
+      assert.is_true(valid[origin] == true, "protocol.ORIGIN." .. name .. " is not a wire origin")
+    end
+  end)
+end)

@@ -166,10 +166,19 @@ status with red/yellow/green indicators.
 
 ## Protocol
 
-The wire contract — line-delimited JSON envelopes over TCP — lives in
-[`rtl_buddy/src/rtl_buddy/hub/schema/hub-protocol-v1.json`](https://github.com/rtl-buddy/rtl_buddy/blob/main/src/rtl_buddy/hub/schema/hub-protocol-v1.json).
+The wire contract — line-delimited JSON envelopes over TCP — is owned by
+[`rtl-buddy-sch/schemas/hub-protocol-v1.json`](https://github.com/rtl-buddy/rtl-buddy-sch/blob/main/schemas/hub-protocol-v1.json);
+rtl_buddy and this plugin both vendor it (`lua/rtlbuddy/schema/hub-protocol-v1.json`),
+and CI's `schema-drift` job fails if our copy diverges from that `main`.
 The plugin registers as `origin: "src"`; the hub broadcasts to all other origins,
 suppressing echo-back to `src`.
+
+Adding an origin to the vocabulary is a lockstep edit across all three repos, in a
+fixed merge order (schema first — the drift job is red by construction until it lands).
+The checklist, with the test that catches each missed copy, is
+[`docs/hub-protocol.md` §13](https://github.com/rtl-buddy/rtl-buddy-sch/blob/main/docs/hub-protocol.md#13-adding-or-renaming-an-origin--lockstep-checklist)
+in that repo; this plugin's share of it is `PEERS` in `lua/rtlbuddy/schema.lua` and
+`VALID_ORIGIN` in `lua/rtlbuddy/protocol.lua`, both fenced by `tests/schema_spec.lua`.
 
 ## Tests
 

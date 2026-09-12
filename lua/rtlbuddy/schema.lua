@@ -41,6 +41,13 @@ for _, o in ipairs(PEERS) do
 end
 local PEER_STR = table.concat(PEERS, "|")
 
+-- Exposed so tests/schema_spec.lua can pin it against the vendored
+-- schema's `origin` enum, the vocabulary's owner. It is a hand-copy of
+-- that enum (this validator is pure Lua and does not read the JSON at
+-- runtime), which is exactly why it needs a fence: see
+-- rtl-buddy-sch `docs/hub-protocol.md` §13 for the cross-repo checklist.
+M.PEERS = PEERS
+
 local function is_nonneg_int(v)
   return type(v) == "number" and v == math.floor(v) and v >= 0
 end
