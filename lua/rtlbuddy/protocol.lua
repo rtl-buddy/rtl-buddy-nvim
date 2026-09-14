@@ -12,8 +12,16 @@ M.KIND = { EVENT = "event", REQUEST = "request", RESPONSE = "response", ERROR = 
 -- The full wire vocabulary, as a set. A second hand-copy of the schema's
 -- `origin` enum (rtlbuddy.schema keeps the ordered one); exposed so
 -- tests/schema_spec.lua pins both against the vendored JSON.
-local VALID_ORIGIN =
-  { view = true, wave = true, src = true, cli = true, notebook = true, graph = true, cov = true }
+local VALID_ORIGIN = {
+  view = true,
+  wave = true,
+  src = true,
+  cli = true,
+  notebook = true,
+  graph = true,
+  cov = true,
+  phys = true,
+}
 M.VALID_ORIGIN = VALID_ORIGIN
 local VALID_KIND = { event = true, request = true, response = true, error = true }
 

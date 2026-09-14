@@ -34,7 +34,7 @@ end
 -- peers list all share it. One table, so the next origin added to the
 -- protocol lands here once instead of in four hand-copied enums (cov
 -- trailed graph/notebook for exactly that reason).
-local PEERS = { "view", "wave", "src", "cli", "notebook", "graph", "cov" }
+local PEERS = { "view", "wave", "src", "cli", "notebook", "graph", "cov", "phys" }
 local PEER_SET = {}
 for _, o in ipairs(PEERS) do
   PEER_SET[o] = true

@@ -77,7 +77,7 @@ describe("rtlbuddy.schema.validate", function()
   it("welcome accepts every peer in the closed vocabulary", function()
     assert.is_nil(schema.validate(env("welcome", "response", {
       server_version = "1.0.0",
-      registered_clients = { "view", "wave", "src", "cli", "notebook", "graph", "cov" },
+      registered_clients = { "view", "wave", "src", "cli", "notebook", "graph", "cov", "phys" },
     })))
   end)
 
