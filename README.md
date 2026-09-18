@@ -13,6 +13,8 @@ This plugin is the **source-side** participant in the hub mesh. With it loaded:
 - `rb wave` launches nvim with the selected signal's value rendered inline as virtual text at
   its declaration, and `<leader>wa` adds the signal under the cursor straight to the Surfer
   waveform (folded in from rtl_buddy's old standalone `rtl_buddy_wave.lua`).
+- Each `module` declaration carries its physical numbers — cells, area and instance power —
+  as virtual text, read from the artefacts `rb synth` / `rb power` left on disk.
 
 The plugin **composes with** `verible-verilog-ls`. It never shadows `<C-]>`, never claims the
 LSP diagnostics namespace, and never re-parses Verilog — it leans on Verible for symbol
@@ -109,6 +111,10 @@ require("rtlbuddy").setup({
     annotate = true,            -- `rb wave` inline signal-value virtual text
     keymap   = "<leader>wa",    -- add signal under cursor to Surfer (false to disable)
   },
+  phys = {
+    annotate = true,            -- cells/area/power virtual text at module declarations
+    keymap   = "<leader>rp",    -- :RtlBuddyPhys toggle (false to disable)
+  },
 })
 ```
 
@@ -127,6 +133,43 @@ warns if the control socket isn't reachable (i.e. `rb wave` isn't running). See 
 [rtl_buddy wave docs](https://rtl-buddy.github.io/rtl_buddy/concepts/wave/) for the
 `cfg-surfer` `editor-sock` / `ctrl-sock` setup.
 
+## Phys annotation (`rb phys`)
+
+Every `module <name>` declaration in a verilog/systemverilog buffer gets its physical
+numbers as end-of-line virtual text (the `RtlBuddyPhys` highlight):
+
+```systemverilog
+module alu (            ▸ 1 234 cells · 72.1 µm² · 15.2 µW
+```
+
+The numbers come from the artefacts `rb synth` and `rb power` already wrote (rtl_buddy
+≥ 6.49.0), via two machine-mode reads run in the buffer's project root:
+
+| Read | Gives |
+|---|---|
+| `rb --machine phys summary --limit 0` | every module's `cell_count` and `area_um2`, one call per project |
+| `rb --machine phys module <name>` | that module's instance power roll-up, one call per module declared in the buffer |
+
+No hub connection is needed and nothing crosses the hub wire — `rb phys` runs no tool, it
+reads JSON off disk. Both reads are async (`vim.system`) and debounced, the summary is
+cached per project root for the session, and the marks refresh on `BufEnter` /
+`BufWritePost`. `:RtlBuddyPhys` toggles them, `:RtlBuddyPhysRefresh` re-reads the model
+after a `rb synth` / `rb power` run in another terminal.
+
+Each part is omitted rather than guessed at:
+
+- no cells/area for a module the synthesis half has no row for;
+- **no power unless the verb attributes it to that name without a caveat.** The power
+  half's `module` column names Liberty *cells* (`DFF_X1`), never RTL modules, so
+  `rb phys module` flags the join it made (`instance_join`) whenever the rows are not that
+  module's own power. Until rtl_buddy's hierarchy join lands
+  ([rtl_buddy#558](https://github.com/rtl-buddy/rtl_buddy/issues/558)) most RTL modules
+  therefore show cells and area alone;
+- no mark at all for a name neither half of the model knows.
+
+With no `rb` on `PATH`, no physical model, or a refusal from the verb: no marks and one
+`vim.notify` at DEBUG level. `:checkhealth rtlbuddy` carries the standing answer.
+
 ## Commands
 
 | Command | What it does |
@@ -136,6 +179,8 @@ warns if the control socket isn't reachable (i.e. `rb wave` isn't running). See 
 | `:RtlBuddyToWave` | Request `wave_add_variables` for the symbol under the cursor. |
 | `:RtlBuddyDomain` | Show hub-resolved overlay info at the cursor in a floating window. |
 | `:RtlBuddyStatus` | Print hub connection state and registered peers. |
+| `:RtlBuddyPhys` | Toggle the phys annotation (cells / area / power at module declarations). |
+| `:RtlBuddyPhysRefresh` | Re-read the physical model for this buffer's project and redraw. |
 
 ## Composition with Verible-LSP
 

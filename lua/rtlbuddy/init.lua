@@ -22,6 +22,12 @@ local DEFAULT_CONFIG = {
     annotate = true,
     keymap = "<leader>wa",
   },
+  -- `rb phys` inline annotation: a module's cells, area and instance power as
+  -- virtual text at its declaration. rtl-buddy/rtl-buddy-nvim#12.
+  phys = {
+    annotate = true,
+    keymap = "<leader>rp",
+  },
 }
 
 local _state = {
@@ -66,6 +72,7 @@ function M.setup(user_config)
   commands.register()
   require("rtlbuddy.keymaps").apply(config.keymaps)
   require("rtlbuddy.wave").setup(config.wave)
+  require("rtlbuddy.phys").setup(config.phys)
 
   local hub = require("rtlbuddy.hub")
   _state.client = hub.new({

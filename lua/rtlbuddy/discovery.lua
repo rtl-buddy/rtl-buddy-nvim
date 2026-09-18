@@ -7,6 +7,10 @@ local ENV_OVERRIDE = "RTL_BUDDY_HUB"
 local HUB_DIR_NAME = ".rtl-buddy"
 local HUB_DISCOVERY_FILENAME = "hub.json"
 
+-- What marks a project root, in the order rtl_buddy's own
+-- discover_project_root walks for them.
+local ROOT_MARKERS = { "root_config.yaml", ".git" }
+
 local function read_json(path)
   local fd = vim.uv.fs_open(path, "r", 438)
   if not fd then
@@ -29,12 +33,15 @@ local function read_json(path)
   return decoded
 end
 
-local function find_discovery(start)
+-- Walk from `start` up to the filesystem root, returning the first non-nil
+-- `probe(dir)`. Shared by hub discovery and project-root finding: the two walk
+-- identically and differ only in what they are looking for.
+local function walk_up(start, probe)
   local cur = vim.fs.normalize(start)
   while cur and cur ~= "" do
-    local candidate = cur .. "/" .. HUB_DIR_NAME .. "/" .. HUB_DISCOVERY_FILENAME
-    if vim.uv.fs_stat(candidate) then
-      return candidate
+    local hit = probe(cur)
+    if hit then
+      return hit
     end
     local parent = vim.fs.dirname(cur)
     if not parent or parent == cur then
@@ -43,6 +50,32 @@ local function find_discovery(start)
     cur = parent
   end
   return nil
+end
+
+local function find_discovery(start)
+  return walk_up(start, function(dir)
+    local candidate = dir .. "/" .. HUB_DIR_NAME .. "/" .. HUB_DISCOVERY_FILENAME
+    if vim.uv.fs_stat(candidate) then
+      return candidate
+    end
+    return nil
+  end)
+end
+
+-- The project root above `start`: the nearest ancestor carrying a marker from
+-- ROOT_MARKERS, or nil when `start` is in no project at all. This is the
+-- directory an `rb` subprocess must be run in, since that is what decides
+-- which project's artefacts the verb discovers — the hub is not involved, so
+-- it is found by markers rather than from hub.json.
+function M.project_root(start)
+  return walk_up(start or vim.uv.cwd(), function(dir)
+    for _, marker in ipairs(ROOT_MARKERS) do
+      if vim.uv.fs_stat(dir .. "/" .. marker) then
+        return dir
+      end
+    end
+    return nil
+  end)
 end
 
 -- Returns { host, port, pid, server_version, project_root, source } on
