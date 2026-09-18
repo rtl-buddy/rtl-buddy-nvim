@@ -139,33 +139,41 @@ Every `module <name>` declaration in a verilog/systemverilog buffer gets its phy
 numbers as end-of-line virtual text (the `RtlBuddyPhys` highlight):
 
 ```systemverilog
-module alu (            ▸ 1 234 cells · 72.1 µm² · 15.2 µW
+module alu (            ▸ 1 234 cells · 72.1 µm²
+module DFF_X1 (         ▸ 15.2 µW
 ```
 
 The numbers come from the artefacts `rb synth` and `rb power` already wrote (rtl_buddy
-≥ 6.49.0), via two machine-mode reads run in the buffer's project root:
+≥ 6.49.0), via **one** machine-mode read run in the buffer's project root:
 
-| Read | Gives |
+```bash
+rb --machine phys summary --limit 0
+```
+
+Its payload holds both halves of the physical model — every synthesis row
+(`cell_count`, `area_um2`) and every instance row (path, cell, power) — so every
+declaration's numbers come out of that one read. No hub connection is needed and nothing
+crosses the hub wire: `rb phys` runs no tool, it reads JSON off disk. The read is async
+(`vim.system`) and debounced, cached per project root for the session, and the marks
+refresh on `BufEnter` / `BufWritePost`. `:RtlBuddyPhys` toggles them,
+`:RtlBuddyPhysRefresh` re-reads the model after a `rb synth` / `rb power` run in another
+terminal.
+
+The two halves spell `module` in two different namespaces, and that decides which numbers
+a declaration can carry:
+
+| Declaration's name is | Shown |
 |---|---|
-| `rb --machine phys summary --limit 0` | every module's `cell_count` and `area_um2`, one call per project |
-| `rb --machine phys module <name>` | that module's instance power roll-up, one call per module declared in the buffer |
+| an RTL module (synthesis half) | cells and area — **no power**: no instance row carries an RTL module's name |
+| a Liberty cell (instance half), e.g. `DFF_X1` | the sum of its instances' `total_uw` |
+| in both halves | its own cells and area only — the power would be a different thing's |
+| in neither | nothing: no mark at all |
 
-No hub connection is needed and nothing crosses the hub wire — `rb phys` runs no tool, it
-reads JSON off disk. Both reads are async (`vim.system`) and debounced, the summary is
-cached per project root for the session, and the marks refresh on `BufEnter` /
-`BufWritePost`. `:RtlBuddyPhys` toggles them, `:RtlBuddyPhysRefresh` re-reads the model
-after a `rb synth` / `rb power` run in another terminal.
-
-Each part is omitted rather than guessed at:
-
-- no cells/area for a module the synthesis half has no row for;
-- **no power unless the verb attributes it to that name without a caveat.** The power
-  half's `module` column names Liberty *cells* (`DFF_X1`), never RTL modules, so
-  `rb phys module` flags the join it made (`instance_join`) whenever the rows are not that
-  module's own power. Until rtl_buddy's hierarchy join lands
-  ([rtl_buddy#558](https://github.com/rtl-buddy/rtl_buddy/issues/558)) most RTL modules
-  therefore show cells and area alone;
-- no mark at all for a name neither half of the model knows.
+Those are the same answers `rb phys module <name>` gives (its `instance_join` note is how
+the verb says the rows it joined are not that module's power), which is why the roll-up is
+summed from the one payload rather than fanned out into a subprocess per declared module.
+Attributing power to an RTL module needs the instance hierarchy, which the schematic owns
+([rtl-buddy-sch#22](https://github.com/rtl-buddy/rtl-buddy-sch/issues/22)).
 
 With no `rb` on `PATH`, no physical model, or a refusal from the verb: no marks and one
 `vim.notify` at DEBUG level. `:checkhealth rtlbuddy` carries the standing answer.

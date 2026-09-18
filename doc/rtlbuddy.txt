@@ -87,28 +87,39 @@ With `phys.annotate` (the default), each `module <name>` declaration line in a
 verilog/systemverilog buffer gets end-of-line virtual text with that module's
 physical numbers, in the `RtlBuddyPhys` highlight: >
 
-    module alu (            ▸ 1 234 cells · 72.1 µm² · 15.2 µW
+    module alu (            ▸ 1 234 cells · 72.1 µm²
+    module DFF_X1 (         ▸ 15.2 µW
 <
 The numbers are read from the artefacts `rb synth` and `rb power` left on disk
-(rtl_buddy >= 6.49.0), by two machine-mode reads run in the buffer's project
-root:
+(rtl_buddy >= 6.49.0), by ONE machine-mode read run in the buffer's project
+root: >
 
-  `rb --machine phys summary --limit 0`    every module's cells and area
-  `rb --machine phys module <name>`        that module's instance power
+    rb --machine phys summary --limit 0
+<
+whose payload holds both halves of the model — every synthesis row and every
+instance row — so every declaration's numbers come out of the one read. No hub
+connection is involved and nothing crosses the hub wire. The read is
+asynchronous (`vim.system`) and debounced, it is cached per project root for
+the session, and the annotation refreshes on `BufEnter` and `BufWritePost`.
 
-No hub connection is involved and nothing crosses the hub wire. Both reads are
-asynchronous (`vim.system`) and debounced, the summary is cached per project
-root for the session, and the annotation refreshes on `BufEnter` and
-`BufWritePost`.
+The two halves spell `module` in two different namespaces, and that decides
+which numbers a declaration can carry:
 
-Parts are omitted rather than guessed at:
+  * cells and area come from the synthesis half, whose `module` is an RTL
+    module as Yosys' `stat` saw it;
+  * power is summed over the instance half's rows, whose `module` is the
+    Liberty cell each leaf is an instance of — so it is shown for a
+    declaration named after a cell (`DFF_X1`), and only then;
+  * a name both halves carry keeps its own cells and area and gets no power:
+    the two would be measurements of two different things;
+  * an RTL module gets no power at all, because no instance row carries an
+    RTL module's name. Attributing power to an RTL module needs the instance
+    hierarchy, which the schematic owns (rtl-buddy/rtl-buddy-sch#22);
+  * a name neither half knows gets no mark at all.
 
-  * no cells/area for a module the synthesis half has no row for;
-  * no power unless `rb phys module` attributes it to that name without a
-    caveat. The power half's `module` column names Liberty *cells*, not RTL
-    modules, so until rtl_buddy's hierarchy join lands (rtl_buddy#558) most
-    RTL modules show cells and area alone;
-  * no mark at all for a module neither half of the model knows.
+Those are the same answers `rb phys module <name>` gives, which is why the
+roll-up is summed from the one payload rather than fanned out into a
+subprocess per declared module.
 
 When `rb` is not on `PATH`, the project has no physical model, or the verb
 refuses, there are no marks and one |vim.notify()| at DEBUG level; the

@@ -7,27 +7,39 @@
 -- reads artefacts already on disk and runs no tool, so the annotation is a
 -- subprocess and a JSON parse, nothing more.
 --
--- Two calls make one refresh, because the two halves of the physical model
--- spell `module` in two different namespaces:
+-- **One call makes one refresh**: `phys summary --limit 0`, whose payload holds
+-- both halves of the physical model — every synthesis row (`cell_count`,
+-- `area_um2`) and every instance row (path, cell, power). One subprocess per
+-- project, cached per project root for the session, and the numbers for every
+-- declaration in the buffer come out of that one payload.
 --
---   * `phys summary --limit 0` — every name the model holds, with the cells
---     and area the synthesis half has for it. One subprocess for the whole
---     project, cached per project root for the session.
---   * `phys module <name>` — the power roll-up, one call per module *declared
---     in the buffer* (a file declares a handful, not thousands) and only for
---     names the summary knows.
+-- The two halves spell `module` in two different namespaces, and which numbers
+-- a name can carry follows from that:
 --
--- The roll-up is asked of the verb rather than summed here, because the join
--- it makes is the whole difficulty: the power half's `module` column names
--- Liberty *cells* (`DFF_X1`), never RTL modules, so summing instance rows by
--- name in the editor would attribute one namespace's power to the other's
--- blocks. `instance_join` on the payload is how the verb says the rows it
--- joined are *not* the named module's power — a name that is a module in one
--- half and a cell in the other, or the RTL-module join that cannot see leaves
--- named after cells — and the power part is omitted whenever it is set. Until
--- rtl_buddy's hierarchy join lands (rtl-buddy/rtl_buddy#558) that is most RTL
--- modules, so most marks are cells and area alone; nothing here has to change
--- when it does.
+--   * **cells and area** come from the synthesis half, whose `module` is an RTL
+--     module as Yosys' `stat` saw it after elaboration;
+--   * **power** is summed over the instance half's rows, whose `module` is the
+--     Liberty cell each leaf is an instance of (`DFF_X1`, `NAND2_X1`) — so it
+--     is shown for a declaration whose name is a *cell* name, and only then;
+--   * a name **both** halves carry is two measurements of two different things
+--     (an RTL module's cells beside an unrelated cell type's power), so the
+--     power part is dropped rather than presented as one module's totals;
+--   * a name the **synthesis half alone** carries gets no power, because no
+--     instance row carries an RTL module's name. Attributing an RTL module's
+--     power needs the instance hierarchy, which the schematic owns
+--     (rtl-buddy/rtl-buddy-sch#22), not this annotation.
+--
+-- Those are exactly the answers `rb phys module <name>` gives today — its
+-- `instance_join` note says "liberty-cell names only" for the third case and
+-- "name collision" for the second — so the roll-up is summed from the summary
+-- payload rather than fanned out into one subprocess per declared module. A
+-- 30-module file would otherwise spawn 30 `rb` processes on one `BufEnter`.
+--
+-- Cost of that trade: `--limit 0` emits every instance row, which on a
+-- 40k-instance run is ~5.8 MB of JSON and ~28 ms to decode — once per project
+-- per session. A modules-only listing would make the read cheap without
+-- costing the roll-up; that is rtl-buddy/rtl_buddy#606, not a reason to
+-- head the ranking (a headed summary would leave most declarations blank).
 --
 -- Everything is async (`vim.system`) and debounced: BufEnter fires on every
 -- window hop, and the UI may never wait on a process spawn.
@@ -48,13 +60,13 @@ local _state = {
   annotate = false,
   -- The `rb` seam; injected by the tests, nil means the real subprocess.
   runner = nil,
-  -- project root -> { token, modules, power, error, notified, pending }
+  -- project root -> { index, error, notified, pending }
   cache = {},
   -- bufnr -> uv timer
   timers = {},
-  -- bufnr -> refresh generation. A refresh spans two subprocesses, so a buffer
-  -- edited (or re-entered) while one is in flight has a newer set of rows on
-  -- the way; the stale callback must not draw over it.
+  -- bufnr -> refresh generation. A refresh spans a subprocess, so a buffer
+  -- edited (or re-entered) while one is in flight has a newer answer on the
+  -- way; the stale callback must not draw.
   generations = {},
 }
 
@@ -74,10 +86,15 @@ end
 -- ---------------------------------------------------------------------------
 
 -- "1234" -> "1 234". A virtual-text line is read at a glance beside the
--- declaration, and "12345 cells" is not read at a glance.
+-- declaration, and "12345 cells" is not read at a glance. The sign is split
+-- off first, so a three-digit negative does not come back as "- 123".
 local function group(digits)
-  local out = digits:sub(-3)
-  local rest = digits:sub(1, -4)
+  local sign, rest = digits:match("^(%-?)(%d+)$")
+  if not rest then
+    return digits
+  end
+  local out = rest:sub(-3)
+  rest = rest:sub(1, -4)
   while #rest > 3 do
     out = rest:sub(-3) .. " " .. out
     rest = rest:sub(1, -4)
@@ -85,7 +102,7 @@ local function group(digits)
   if rest ~= "" then
     out = rest .. " " .. out
   end
-  return out
+  return sign .. out
 end
 
 -- One physical scalar. Two decimals below 10 so a fraction-of-a-µW total does
@@ -101,8 +118,8 @@ local function scalar(value)
 end
 
 -- The annotation for one module, or nil when nothing at all is known about it
--- (which is how an undeclared-in-the-model module gets no mark rather than an
--- empty one).
+-- (which is how a name the model holds no numbers for gets no mark rather than
+-- an empty one).
 local function annotation(cells, area, power)
   local parts = {}
   if type(cells) == "number" then
@@ -124,18 +141,31 @@ end
 -- the buffer's declarations
 -- ---------------------------------------------------------------------------
 
--- Every `module <name>` declaration line in the buffer, 0-based.
+-- The module name a line declares, or nil.
 --
 -- A plain pattern match on the keyword, not a parse: this plugin never
 -- re-parses Verilog (Verible and the hub own that), and a declaration line is
 -- the one construct a pattern gets right. Anchored at the start of the line so
 -- `endmodule` and an instantiation mentioning the word are never matched, and
--- a name is only taken when the keyword opens the line.
+-- a name is only taken when the keyword opens the line. SystemVerilog allows a
+-- lifetime qualifier between the keyword and the name (`module automatic foo`),
+-- which is skipped rather than read as the name; both are reserved words, so a
+-- module cannot be called either.
+local function declared_name(line)
+  local rest = line:match("^%s*module%s+(.*)$") or line:match("^%s*macromodule%s+(.*)$")
+  if not rest then
+    return nil
+  end
+  rest = rest:gsub("^static%s+", "")
+  rest = rest:gsub("^automatic%s+", "")
+  return rest:match("^([%a_][%w_$]*)")
+end
+
+-- Every declaration in the buffer, with 0-based line numbers.
 local function declarations(bufnr)
   local found = {}
   for lnum, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
-    local name = line:match("^%s*module%s+([%a_][%w_$]*)")
-      or line:match("^%s*macromodule%s+([%a_][%w_$]*)")
+    local name = declared_name(line)
     if name then
       table.insert(found, { lnum = lnum - 1, name = name })
     end
@@ -170,38 +200,44 @@ local function decode_envelope(stdout)
   return nil
 end
 
+-- One run's stdout and exit code -> its payload, or nil and a one-line reason.
+--
+-- A refusal is an envelope whose payload carries `error`, and its `exit_code`
+-- is the verb's own rather than the process' (machine mode reports the refusal
+-- in the document and still exits 0 in some paths, so both are checked). No
+-- envelope at all — `rb` missing, a crash, a traceback — is the same kind of
+-- answer here: no numbers.
+local function envelope_result(stdout, code, shown)
+  local envelope = decode_envelope(stdout)
+  if not envelope then
+    return nil, string.format("`%s` emitted no machine envelope (exit %s)", shown, tostring(code))
+  end
+  local refusal = present(envelope.payload.error)
+  if refusal then
+    return nil, tostring(refusal)
+  end
+  local reported = present(envelope.exit_code) or code
+  if reported ~= 0 then
+    return nil, string.format("`%s` exited %s", shown, tostring(reported))
+  end
+  return envelope.payload
+end
+
 -- The real runner: `rb --machine phys <args…>` in `cwd`, calling
--- `done(payload)` on success and `done(nil, why)` otherwise. A refusal is a
--- payload with an `error` on a non-zero `exit_code`, and both a missing `rb`
--- and an unparseable stdout are the same kind of answer here: no numbers.
+-- `done(payload)` on success and `done(nil, why)` otherwise.
 local function spawn(args, cwd, done)
+  local shown = "rb phys " .. table.concat(args, " ")
   if vim.fn.executable("rb") == 0 then
     done(nil, "`rb` is not on PATH")
     return
   end
   local argv = { "rb", "--machine", "phys" }
   vim.list_extend(argv, args)
-  local shown = "rb phys " .. table.concat(args, " ")
   vim.system(argv, { cwd = cwd, text = true }, function(result)
     -- vim.system's on_exit runs in a fast event context; nothing below may
     -- touch the API from there.
     vim.schedule(function()
-      local envelope = decode_envelope(result.stdout)
-      if not envelope then
-        done(nil, string.format("`%s` emitted no machine envelope (exit %d)", shown, result.code))
-        return
-      end
-      local refusal = present(envelope.payload.error)
-      if refusal then
-        done(nil, refusal)
-        return
-      end
-      local code = present(envelope.exit_code) or result.code
-      if code ~= 0 then
-        done(nil, string.format("`%s` exited %s", shown, tostring(code)))
-        return
-      end
-      done(envelope.payload)
+      done(envelope_result(result.stdout, result.code, shown))
     end)
   end)
 end
@@ -217,7 +253,7 @@ end
 local function cache_for(root)
   local entry = _state.cache[root]
   if not entry then
-    entry = { power = {} }
+    entry = {}
     _state.cache[root] = entry
   end
   return entry
@@ -234,64 +270,66 @@ local function report(entry, reason)
   vim.notify("rtlbuddy phys: " .. reason, vim.log.levels.DEBUG)
 end
 
--- What tells one publication of the model from the next. The payload does not
--- carry the model's own `publication` token, so this is the triple that moves
--- with it: which manifest was read, which model it named, and when that pair
--- was written. A change invalidates the per-module power roll-ups, which were
--- read out of the previous publication.
-local function publication_token(payload)
-  return table.concat({
-    tostring(present(payload.manifest) or "?"),
-    tostring(present(payload.model) or "?"),
-    tostring(present(payload.generated_at) or "?"),
-  }, "|")
+-- One name out of either half's `module` column. `name` is accepted as well,
+-- so a future spelling of the column would not blank the display.
+local function row_name(row)
+  local name = present(row.module) or present(row.name)
+  return name and tostring(name) or nil
 end
 
--- Every name the model can be asked about, keyed by name, carrying the cells
--- and area the synthesis half has for it.
+-- The whole payload as one index: name -> { cells, area, power }.
 --
--- `module` is what the column is called in both halves of the payload (`name`
--- is accepted as well, so a future spelling would not blank the display), but
--- they are two namespaces: the synthesis ranking names RTL modules as Yosys'
--- `stat` saw them, and the instance ranking names the Liberty cell each leaf
--- is an instance of. Both are indexed, because both are names a buffer can
--- declare and the second is the only one power can be attributed to today;
--- a name from the instance ranking alone carries no cells or area, which are
--- the synthesis half's columns and nothing else's.
---
--- This is why the summary is read with `--limit 0`: a headed ranking would
--- index the ten heaviest modules and silently leave every other declaration
--- in the buffer unannotated.
-local function index_modules(payload)
-  local rows = {}
+-- Which numbers a name may carry is the namespace rule this module's header
+-- sets out. The power sum skips rows whose total was never measured (`null` in,
+-- `null` out, as rtl_buddy's own `_power_sum` has it), so a cell type nothing
+-- reported power for stays a known name with no numbers rather than 0 µW; and
+-- a name the synthesis half also carries keeps its cells and area and gets no
+-- power at all.
+local function index_payload(payload)
+  local index = {}
   for _, row in ipairs(present(payload.modules) or {}) do
-    local name = present(row.module) or present(row.name)
+    local name = row_name(row)
     if name then
-      rows[tostring(name)] = { cells = present(row.cell_count), area = present(row.area_um2) }
+      index[name] = { cells = present(row.cell_count), area = present(row.area_um2) }
     end
   end
+  -- Summed into a table of its own and merged after, because one cell name has
+  -- many instance rows: accumulating straight into `index` would make the
+  -- second row of a cell look like a name already claimed by the first.
+  -- `false` is a name whose rows carried no measured total — a known name with
+  -- no numbers, which is not the same as 0 µW.
+  local power = {}
   for _, row in ipairs(present(payload.instances) or {}) do
-    local name = present(row.module) or present(row.name)
-    if name and not rows[tostring(name)] then
-      rows[tostring(name)] = {}
+    local name = row_name(row)
+    -- Only for a cell name the synthesis half does not also claim: see above.
+    if name and index[name] == nil then
+      local total = present(row.total_uw)
+      if type(total) == "number" then
+        power[name] = (power[name] or 0.0) + total
+      elseif power[name] == nil then
+        power[name] = false
+      end
     end
   end
-  return rows
+  for name, total in pairs(power) do
+    index[name] = { power = total or nil }
+  end
+  return index
 end
 
--- `done(modules)` with the project's module index, or `done(nil)` when there
--- is none. Cached for the session — the physical model changes when `rb synth`
--- or `rb power` runs, not when a buffer is written, and
--- `:RtlBuddyPhysRefresh` is the way to say it did. Concurrent callers (two
--- windows entered before the first answer lands) share the one subprocess.
-local function with_summary(root, done)
+-- `done(index)` with the project's index, or `done(nil)` when there is none.
+-- Cached for the session — the physical model changes when `rb synth` or
+-- `rb power` runs, not when a buffer is written, and `:RtlBuddyPhysRefresh` is
+-- the way to say it did. Concurrent callers (two windows entered before the
+-- first answer lands) share the one subprocess.
+local function with_index(root, done)
   local entry = cache_for(root)
   if entry.error then
     done(nil)
     return
   end
-  if entry.modules then
-    done(entry.modules)
+  if entry.index then
+    done(entry.index)
     return
   end
   if entry.pending then
@@ -310,65 +348,10 @@ local function with_summary(root, done)
       end
       return
     end
-    local token = publication_token(payload)
-    if entry.token and entry.token ~= token then
-      entry.power = {}
-    end
-    entry.token = token
-    entry.modules = index_modules(payload)
+    entry.index = index_payload(payload)
     for _, waiter in ipairs(waiters) do
-      waiter(entry.modules)
+      waiter(entry.index)
     end
-  end)
-end
-
--- One module payload -> its instances' total power in µW, or nil.
---
--- nil in the three cases the verb keeps apart, and this annotation must not
--- blur: no power half at all (`instances` is null), a power half with no rows
--- for this module (`instances` empty), and any payload carrying an
--- `instance_join` note — which is the verb saying the rows it joined are not
--- this module's power. See `module_payload` in rtl_buddy's
--- src/rtl_buddy/phys/query.py.
-local function module_power(payload)
-  if present(payload.instance_join) then
-    return nil
-  end
-  local instances = present(payload.instances)
-  if type(instances) ~= "table" or vim.tbl_isempty(instances) then
-    return nil
-  end
-  local power = present(payload.power)
-  if type(power) ~= "table" then
-    return nil
-  end
-  local total = present(power.total_uw)
-  if type(total) ~= "number" then
-    return nil
-  end
-  return total
-end
-
--- `done(total_uw)` for one module, cached per root. `false` is a cached "there
--- is none": a module whose power is genuinely absent — the common shape on a
--- synthesis-only run — must not be re-asked on every BufEnter.
-local function with_power(root, name, done)
-  local entry = cache_for(root)
-  local cached = entry.power[name]
-  if cached ~= nil then
-    done(cached or nil)
-    return
-  end
-  runner()({ "module", name }, root, function(payload, err)
-    if not payload then
-      entry.power[name] = false
-      report(entry, err or ("no power for module " .. name))
-      done(nil)
-      return
-    end
-    local total = module_power(payload)
-    entry.power[name] = total or false
-    done(total)
   end)
 end
 
@@ -388,21 +371,23 @@ local function clear_all()
   end
 end
 
--- Redraw the whole set. Called once when the summary lands and again as each
--- power roll-up arrives, so cells and area appear immediately rather than at
--- the speed of the slowest call. The line count is re-checked because the
--- buffer may have been edited while a subprocess was in flight.
-local function render(bufnr, rows)
+-- Draw every declaration's numbers, from the index.
+--
+-- The declarations are re-derived here rather than taken from the scan the
+-- refresh started with, because a subprocess sits between the two: the lines
+-- that scan recorded may have moved, or stopped declaring anything, and a mark
+-- placed at a snapshotted line number is then simply in the wrong place.
+local function render(bufnr, index)
   if not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
   local ns = namespace()
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
-  local lines = vim.api.nvim_buf_line_count(bufnr)
-  for _, row in ipairs(rows) do
-    local text = annotation(row.cells, row.area, row.power)
-    if text and row.lnum < lines then
-      vim.api.nvim_buf_set_extmark(bufnr, ns, row.lnum, 0, {
+  for _, decl in ipairs(declarations(bufnr)) do
+    local row = index[decl.name]
+    local text = row and annotation(row.cells, row.area, row.power)
+    if text then
+      vim.api.nvim_buf_set_extmark(bufnr, ns, decl.lnum, 0, {
         virt_text = { { text, HL_GROUP } },
         virt_text_pos = "eol",
       })
@@ -427,53 +412,36 @@ function M.refresh(bufnr)
   if not _state.annotate or not vim.api.nvim_buf_is_valid(bufnr) then
     return
   end
-  local decls = declarations(bufnr)
-  if #decls == 0 then
-    clear(bufnr)
-    return
-  end
-  local root = root_for(bufnr)
-  if not root then
-    return
-  end
+  -- Bumped before the early returns below, not after them: a buffer whose last
+  -- declaration was just deleted, or which has moved out of a project, must
+  -- still invalidate the refresh that is in flight for it — otherwise that
+  -- answer comes back and draws on lines this refresh has just found nothing
+  -- at.
   local generation = (_state.generations[bufnr] or 0) + 1
   _state.generations[bufnr] = generation
   -- Whether this refresh is still the buffer's current one.
   local function current()
     return _state.annotate and _state.generations[bufnr] == generation
   end
-  with_summary(root, function(modules)
+
+  if #declarations(bufnr) == 0 then
+    clear(bufnr)
+    return
+  end
+  local root = root_for(bufnr)
+  if not root then
+    clear(bufnr)
+    return
+  end
+  with_index(root, function(index)
     if not current() then
       return
     end
-    if not modules then
+    if not index then
       clear(bufnr)
       return
     end
-    local rows = {}
-    for _, decl in ipairs(decls) do
-      local row = modules[decl.name]
-      -- A declaration the model knows no name for gets no mark at all: the
-      -- model is of one run of one top, and a buffer's other modules were
-      -- simply not in it.
-      if row then
-        table.insert(rows, {
-          lnum = decl.lnum,
-          name = decl.name,
-          cells = row.cells,
-          area = row.area,
-        })
-      end
-    end
-    render(bufnr, rows)
-    for _, row in ipairs(rows) do
-      with_power(root, row.name, function(total)
-        if total and current() then
-          row.power = total
-          render(bufnr, rows)
-        end
-      end)
-    end
+    render(bufnr, index)
   end)
 end
 
@@ -518,18 +486,13 @@ end
 
 -- :RtlBuddyPhysRefresh — drop what was read for this buffer's project and read
 -- it again. The cache is deliberately session-long, so this is how a `rb synth`
--- or `rb power` run in another terminal becomes visible. The power roll-ups
--- are carried over and dropped only if the new summary names a different
--- publication, which is the one thing that can have staled them.
+-- or `rb power` run in another terminal becomes visible. The whole entry goes:
+-- everything in it came out of the one payload that is about to be re-read.
 function M.force_refresh()
   local bufnr = vim.api.nvim_get_current_buf()
   local root = root_for(bufnr)
   if root then
-    local entry = _state.cache[root]
-    _state.cache[root] = {
-      power = (entry and entry.power) or {},
-      token = entry and entry.token or nil,
-    }
+    _state.cache[root] = nil
   end
   M.refresh(bufnr)
 end
@@ -604,9 +567,9 @@ end
 -- Exposed for tests (hermetic: `runner` is injected, so no `rb` is needed).
 M._declarations = declarations
 M._annotation = annotation
-M._module_power = module_power
+M._index_payload = index_payload
 M._decode_envelope = decode_envelope
-M._publication_token = publication_token
+M._envelope_result = envelope_result
 M._state = _state
 
 return M
