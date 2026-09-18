@@ -148,6 +148,21 @@ function M.status()
   vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
 end
 
+-- :RtlBuddyPhys — toggle the `rb phys` annotation (a module's cells, area and
+-- instance power as virtual text at its declaration). The numbers come from
+-- artefacts on disk, so this works with no hub running. nvim#12.
+function M.phys()
+  local on = require("rtlbuddy.phys").toggle()
+  vim.notify("rtlbuddy: phys annotation " .. (on and "on" or "off"), vim.log.levels.INFO)
+end
+
+-- :RtlBuddyPhysRefresh — re-read the physical model for this buffer's project.
+-- The read is cached for the session, so this is how a `rb synth` / `rb power`
+-- run in another terminal becomes visible without restarting nvim.
+function M.phys_refresh()
+  require("rtlbuddy.phys").force_refresh()
+end
+
 -- Handler for hub→plugin `open_source` requests. Returns the response
 -- payload the hub expects.
 function M.handle_open_source_request(env)
@@ -180,6 +195,16 @@ function M.register()
     "RtlBuddyStatus",
     M.status,
     { desc = "Show hub connection status" }
+  )
+  vim.api.nvim_create_user_command(
+    "RtlBuddyPhys",
+    M.phys,
+    { desc = "Toggle phys (cells/area/power) annotation at module declarations" }
+  )
+  vim.api.nvim_create_user_command(
+    "RtlBuddyPhysRefresh",
+    M.phys_refresh,
+    { desc = "Re-read the physical model and redraw the phys annotation" }
   )
 end
 

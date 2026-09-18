@@ -59,6 +59,21 @@ function M.check()
   else
     health.info("wave annotation disabled (set wave.annotate = true to enable)")
   end
+
+  -- Phys annotation (module cells/area/power virtual text) — nvim#12. The
+  -- numbers are read by an `rb` subprocess, so a missing `rb` is the one way
+  -- an enabled annotation still shows nothing; say so here rather than in a
+  -- notification nobody asked for.
+  local phys = state.config and state.config.phys
+  if not phys or phys.annotate ~= false then
+    if vim.fn.executable("rb") == 1 then
+      health.ok("phys annotation enabled (`rb phys` cells/area/power at module declarations)")
+    else
+      health.warn("phys annotation enabled but `rb` is not on PATH — no numbers will be read")
+    end
+  else
+    health.info("phys annotation disabled (set phys.annotate = true to enable)")
+  end
 end
 
 return M

@@ -35,6 +35,16 @@ COMMANDS                                                *rtlbuddy-commands*
                                                               *:RtlBuddyStatus*
 :RtlBuddyStatus      Print hub connection state and registered peers.
 
+                                                                *:RtlBuddyPhys*
+:RtlBuddyPhys        Toggle the phys annotation (a module's cells, area and
+                     instance power as virtual text at its declaration).
+
+                                                         *:RtlBuddyPhysRefresh*
+:RtlBuddyPhysRefresh Re-read the physical model for this buffer's project and
+                     redraw. The read is cached for the session, so this is
+                     how a `rb synth` / `rb power` run in another terminal
+                     becomes visible.
+
 ==============================================================================
 KEYMAPS                                                 *rtlbuddy-keymaps*
 
@@ -44,6 +54,7 @@ Default (opt-out via `setup({keymaps = { show = nil, ... }})`):
   <leader>rw    :RtlBuddyToWave
   <leader>rd    :RtlBuddyDomain
   <leader>wa    add signal under cursor to Surfer (when launched via `rb wave`)
+  <leader>rp    :RtlBuddyPhys (toggle the phys annotation)
 
 <C-]> is left to LSP go-to-definition.
 
@@ -58,6 +69,7 @@ SETUP                                                   *rtlbuddy-setup*
       diagnostics_namespace = "rtlbuddy",
       keymaps = { show = "<leader>rs", to_wave = "<leader>rw", domain = "<leader>rd" },
       wave = { annotate = true, keymap = "<leader>wa" },
+      phys = { annotate = true, keymap = "<leader>rp" },
     })
 <
 
@@ -65,10 +77,63 @@ SETUP                                                   *rtlbuddy-setup*
 text on launch; `wave.keymap` adds the signal under the cursor to Surfer via the
 WAVE_CTRL_SOCK control socket. Set either to false/nil to disable.
 
+`phys.annotate` draws the physical numbers described below; `phys.keymap` maps
+the toggle. Set either to false/nil to disable.
+
+==============================================================================
+PHYS ANNOTATION                                         *rtlbuddy-phys*
+
+With `phys.annotate` (the default), each `module <name>` declaration line in a
+verilog/systemverilog buffer gets end-of-line virtual text with that module's
+physical numbers, in the `RtlBuddyPhys` highlight: >
+
+    module alu (            ▸ 1 234 cells · 72.1 µm²
+    module DFF_X1 (         ▸ 15.2 µW
+<
+The numbers are read from the artefacts `rb synth` and `rb power` left on disk
+(rtl_buddy >= 6.49.0), by ONE machine-mode read run in the buffer's project
+root: >
+
+    rb --machine phys summary --limit 0
+<
+whose payload holds both halves of the model — every synthesis row and every
+instance row — so every declaration's numbers come out of the one read. No hub
+connection is involved and nothing crosses the hub wire. The read is
+asynchronous (`vim.system`) and debounced, it is cached per project root for
+the session, and the annotation refreshes on `BufEnter` and `BufWritePost`.
+
+The two halves spell `module` in two different namespaces, and that decides
+which numbers a declaration can carry:
+
+  * cells and area come from the synthesis half, whose `module` is an RTL
+    module as Yosys' `stat` saw it;
+  * power is summed over the instance half's rows, whose `module` is the
+    Liberty cell each leaf is an instance of — so it is shown for a
+    declaration named after a cell (`DFF_X1`), and only then;
+  * a name both halves carry keeps its own cells and area and gets no power:
+    the two would be measurements of two different things;
+  * an RTL module gets no power at all, because no instance row carries an
+    RTL module's name. Attributing power to an RTL module needs the instance
+    hierarchy, which the schematic owns (rtl-buddy/rtl-buddy-sch#22);
+  * a name neither half knows gets no mark at all.
+
+Those are the same answers `rb phys module <name>` gives, which is why the
+roll-up is summed from the one payload rather than fanned out into a
+subprocess per declared module.
+
+When `rb` is not on `PATH`, the project has no physical model, or the verb
+refuses, there are no marks and one |vim.notify()| at DEBUG level; the
+standing answer is in `:checkhealth rtlbuddy`.
+
+Own namespace (`rtlbuddy_phys`) and highlight group, distinct from the wave
+annotation's and from the `rtlbuddy` diagnostics namespace. Issue:
+rtl-buddy/rtl-buddy-nvim#12 (rtl-buddy/rtl_buddy#596 §2).
+
 ==============================================================================
 HEALTH                                                  *rtlbuddy-health*
 
 `:checkhealth rtlbuddy` reports Neovim version, hub state, LSP attach status,
-and whether wave annotation is enabled.
+whether wave annotation is enabled, and whether the phys annotation is enabled
+and has `rb` on `PATH` to read from.
 
  vim:tw=78:ts=8:noet:ft=help:norl:
